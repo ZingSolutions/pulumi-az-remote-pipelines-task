@@ -1,0 +1,36 @@
+{
+    "manifestVersion": 1,
+    "id": "pulumi-az-remote-pipelines-task",
+    "name": "Pulumi Azure Remote Pipelines Task",
+    "version": "0.0.1",
+    "publisher": "",
+    "targets": [
+        {
+            "id": "Microsoft.VisualStudio.Services"
+        }
+    ],    
+    "description": "Azure Pipelines Build/Release task for running Pulumi apps where state is managed remotely via blob storage and secrets are configured in key vault.",
+    "categories": [
+        "Azure Pipelines"
+    ],
+    "icons": {
+        "default": "images/extension-icon.png"        
+    },
+    "files": [
+        {
+            "path": "buildAndReleaseTask"
+        }
+    ],
+    "contributions": [
+        {
+            "id": "pulumi-az-remote-pipelines-task",
+            "type": "ms.vss-distributed-task.task",
+            "targets": [
+                "ms.vss-distributed-task.tasks"
+            ],
+            "properties": {
+                "name": "buildAndReleaseTask"
+            }
+        }
+    ]
+}

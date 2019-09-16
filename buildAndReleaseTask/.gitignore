@@ -3,3 +3,5 @@
 *.vsix
 *.log
 .taskkey
+
+node_modules/

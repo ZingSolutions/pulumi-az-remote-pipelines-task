@@ -1,0 +1,34 @@
+{
+    "id": "0cb9a01a-d8b5-4b77-88b6-c89c4b4eb02d",
+    "name": "pulumi-az-remote-pipelines-task",
+    "friendlyName": "Pulumi Azure Remote Pipelines Task",
+    "description": "Azure Pipelines task extension for running Pulumi apps where state is managed remotely via blob storage and secrets are configured in key vault.",
+    "helpMarkDown": "",
+    "category": "Deploy",
+    "visibility": [
+        "Build",
+        "Release"
+    ],
+    "author": "dan.hyrjak@zing.dev",
+    "version": {
+        "Major": 0,
+        "Minor": 0,
+        "Patch": 1
+    },
+    "instanceNameFormat": "Echo $(samplestring)",
+    "inputs": [
+        {
+            "name": "samplestring",
+            "type": "string",
+            "label": "Sample String",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "A sample string"
+        }
+    ],
+    "execution": {
+        "Node": {
+            "target": "index.js"
+        }
+    }
+}
