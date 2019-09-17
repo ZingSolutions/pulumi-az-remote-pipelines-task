@@ -1,0 +1,14 @@
+{
+  "name": "pulumi-az-remote-pipelines-task",
+  "version": "1.0.0",
+  "description": "Azure Pipelines Build/Release task for running Pulumi apps where state is managed remotely via blob storage and secrets are configured in key vault.",
+  "main": "",
+  "scripts": {
+    "package": "cd buildAndReleaseTask && npm run tsc && npm run bump-version && cd .. && npm run tfx-create",
+    "start": "cd buildAndReleaseTask && npm run tsc && node index.js",
+    "lint": "cd buildAndReleaseTask && npm run lint",
+    "tfx-create": "tfx extension create --manifest-globs vss-extension.json --rev-version"
+  },
+  "author": "dan.hyrjak@zing.dev",
+  "license": "MIT"
+}

@@ -1,15 +1,15 @@
 import tl = require('azure-pipelines-task-lib/task');
 
-(async function() {
+// tslint:disable-next-line: no-floating-promises
+(async () => {
     try {
         const inputString: string = tl.getInput('samplestring', true);
-        if (inputString == 'bad') {
+        if (inputString === 'bad') {
             tl.setResult(tl.TaskResult.Failed, 'Bad input was given');
             return;
         }
         console.log('Hello', inputString);
-    }
-    catch (err) {
+    } catch (err) {
         tl.setResult(tl.TaskResult.Failed, err.message);
     }
 })();

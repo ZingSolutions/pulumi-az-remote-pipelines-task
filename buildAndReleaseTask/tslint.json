@@ -5,9 +5,18 @@
     ],
     "jsRules": {},
     "rules": {
+        "eofline": false,
+        "no-console": false,
         "ordered-imports": true,
         "no-string-literal": false,
-        "no-floating-promises": [ true, "Q.Promise" ]
+        "no-floating-promises": [
+            true,
+            "Q.Promise"
+        ],
+        "object-literal-key-quotes": true,
+        "quotemark": [
+            false
+        ]
     },
     "rulesDirectory": [],
     "linterOptions": {

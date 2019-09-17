@@ -1,10 +1,9 @@
 {
   "name": "buildandreleasetask",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Azure Pipelines task extension for running Pulumi apps where state is managed remotely via blob storage and secrets are configured in key vault.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "tslint -c tslint.json -p .",
     "tsc": "npm run lint && tsc",
     "bump-version": "vsts-bump --indent 4 task.json"
