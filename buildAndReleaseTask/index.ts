@@ -27,6 +27,25 @@ import Stream from 'stream';
         public static INSTALLED_PULUMI_VERSION: string = "INSTALLED_PULUMI_VERSION";
     }
 
+    class StringStream extends Stream.Writable {
+        private contents = '';
+
+        constructor() {
+            super();
+            Stream.Writable.call(this);
+        }
+
+        // tslint:disable-next-line:variable-name
+        public _write(data: any, _encoding: any, next: any) {
+            this.contents += data;
+            next();
+        }
+
+        public getContents() {
+            return this.contents;
+        }
+    }
+
     interface IServiceEndpoint {
         subscriptionId: string;
         servicePrincipalKey: string;
@@ -73,7 +92,7 @@ import Stream from 'stream';
         toolLib.prependPath(path.join(extractTemp, "pulumi"));
     }
 
-    function getExecOptions(envMap: { [key: string]: string }, workingDirectory: string): IExecOptions {
+    function getExecOptions(envMap: { [key: string]: string }, workingDirectory: string, outStream?: StringStream): IExecOptions {
         return {
             cwd: workingDirectory,
             env: envMap,
@@ -82,7 +101,7 @@ import Stream from 'stream';
             errStream: process.stderr,
             failOnStdErr: false,
             ignoreReturnCode: true,
-            outStream: process.stdout,
+            outStream: outStream ? outStream : process.stdout,
             silent: false,
             windowsVerbatimArguments: false,
         };
@@ -107,22 +126,32 @@ import Stream from 'stream';
         }
     }
 
-    async function initNewStack(keyVaultName: string, stackName: string, azPath: string, toolPath: string, exeOptions: IExecOptions) {
+    async function initNewStack(
+        keyVaultName: string,
+        stackName: string,
+        azPath: string,
+        toolPath: string,
+        envArgs: { [key: string]: string },
+        workingDirectory: string) {
         tl.debug('create new crypto random passphrase');
         const buf = Crypto.randomBytes(64);
         const passphrase: string = buf.toString('base64');
         tl.debug('create secret to hold passphrase in key vault');
         let exitCode = await tl.exec(azPath, ["keyvault", "secret", "set",
             "--name", stackName, "--vault-name", keyVaultName,
-            "--description", `passphrase for pulumi stack: ${stackName}`, "--value", passphrase, "--query", "value"]);
+            "--description", `passphrase for pulumi stack: ${stackName}`,
+            "--value", passphrase,
+            "--query", "value", "-o", "tsv"],
+            getExecOptions(envArgs, '', new StringStream()));
         if (exitCode !== 0) {
             throw new Error(`failed to create passphrase in keyvault for stack: ${stackName}, exit code was: ${exitCode}`);
         }
 
         //set the passphrase and init the stack
-        console.log(`about to set PASSPHRASE: ${passphrase}`);
-        exeOptions.env["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
-        exitCode = await tl.exec(toolPath, ['stack', 'init', stackName, '--secrets-provider', 'passphrase'], exeOptions);
+        envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
+        exitCode = await tl.exec(toolPath,
+            ['stack', 'init', stackName, '--secrets-provider', 'passphrase'],
+            getExecOptions(envArgs, workingDirectory, new StringStream()));
         if (exitCode !== 0) {
             throw new Error(`Pulumi Command: stack init ${stackName} --secrets-provider passphrase failed, exit code was: ${exitCode}`);
         }
@@ -137,6 +166,8 @@ import Stream from 'stream';
         }
         await tl.exec(toolPath, 'version');
 
+        const storageAccountName: string = tl.getInput(InputNames.STORE_ACCOUNT_NAME, true);
+
         tl.debug('gathering required environment variables');
         const envArgs: { [key: string]: string } = {};
         //for AZ CLI access via pulumi
@@ -144,56 +175,70 @@ import Stream from 'stream';
         envArgs["ARM_CLIENT_SECRET"] = serviceEndpoint.servicePrincipalKey;
         envArgs["ARM_TENANT_ID"] = serviceEndpoint.tenantId;
         envArgs["ARM_SUBSCRIPTION_ID"] = serviceEndpoint.subscriptionId;
-        //for blob storage access (for state store)
-        envArgs["AZURE_STORAGE_ACCOUNT"] = tl.getInput(InputNames.STORE_ACCOUNT_NAME, true);
-        //TODO: ["AZURE_STORAGE_KEY"] 
-        //TODO: swich az calls to use https://github.com/Azure/azure-cli
-        //https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-cli
+
         //set existing path
         const pathEnv = process.env["PATH"];
         envArgs["PATH"] = pathEnv || "";
 
+        //for az access via toolRunner
+        tl.debug('login to az');
+        const azPath = tl.which('az');
+        await loginToAz(azPath, serviceEndpoint, getExecOptions(envArgs, ''));
+
+        //for blob storage access (for state store)
+        tl.debug('get storage account access token');
+        const storageKeyStream: StringStream = new StringStream();
+        let exitCode = await tl.exec(azPath,
+            ["storage", "account", "keys", "list",
+                "--account-name", storageAccountName,
+                "--query", "[0].value", "-o", "tsv"],
+            getExecOptions(envArgs, '', storageKeyStream));
+        if (exitCode !== 0) {
+            throw new Error(`failed to get storage account access key, exit code was ${exitCode}`);
+        }
+        const storageAccountKey: string = storageKeyStream.getContents();
+        if (!storageAccountKey || !storageAccountKey.trim()) {
+            throw new Error("failed to get storage account access key from output stream");
+        }
+        console.warn(storageAccountName);
+        console.warn(storageAccountKey.trim());
+        envArgs["AZURE_STORAGE_ACCOUNT"] = storageAccountName;
+        envArgs["AZURE_STORAGE_KEY"] = storageAccountKey.trim();
+
         const containerName: string = tl.getInput(InputNames.STORE_CONTAINER_NAME, true);
         tl.debug(`logging in to pulumi using remote state stored in container named ${containerName}`);
-        let exitCode = await tl.exec(toolPath, ['login', '-c', `azblob://${containerName}`], getExecOptions(envArgs, ''));
+        exitCode = await tl.exec(toolPath, ['login', '-c', `azblob://${containerName}`], getExecOptions(envArgs, ''));
         if (exitCode !== 0) {
             throw new Error(`Pulumi Login failed, exit code was: ${exitCode}`);
         }
 
-        tl.debug('configuring working directory and exe options');
+        tl.debug('configuring working directory and default exe options');
         const workingDirectory = tl.getInput(InputNames.PULUMI_PROGRAM_DIRECTORY, false) || ".";
         const exeOptions = getExecOptions(envArgs, workingDirectory);
 
         let cmd: string = tl.getInput(InputNames.PULUMI_COMMAND, true);
         tl.debug(`command selected ${cmd}`);
-
-        tl.debug('login to az');
-        const azPath = tl.which('az');
-        await loginToAz(azPath, serviceEndpoint, exeOptions);
         const keyVaultName: string = tl.getInput(InputNames.SECRET_KEY_VAULT_NAME, true);
 
         if (cmd === 'stack init') {
-            await initNewStack(keyVaultName, stackName, azPath, toolPath, exeOptions);
+            await initNewStack(keyVaultName, stackName, azPath, toolPath, envArgs, workingDirectory);
             tl.setResult(tl.TaskResult.Succeeded, "new stack created OK");
             return;
         }
 
         tl.debug('getting stack secret');
-        let passphrase: string = '';
-        const passphraseExeOptions = getExecOptions(envArgs, workingDirectory);
-        const ws = new Stream.Writable();
-        //tslint:disable-next-line variable-name
-        ws._write = (chunk, _encoding, next) => {
-            const c = chunk.toString();
-            console.warn(`in custom stream: ${c}`);
-            passphrase = passphrase + c;
-            next();
-        };
-        passphraseExeOptions.outStream = ws;
+        const passphraseStream = new StringStream();
+        const passphraseExeOptions = getExecOptions(envArgs, workingDirectory, passphraseStream);
         await tl.exec(azPath, ["keyvault", "secret", "show",
-            "--name", stackName, "--vault-name", keyVaultName, "--query", "value"],
+            "--name", stackName, "--vault-name", keyVaultName, "--query", "value", "-o", "tsv"],
             passphraseExeOptions);
-        console.log(`about to set PASSPHRASE: ${passphrase}`);
+        if (exitCode !== 0) {
+            throw new Error(`failed to get passphtase from keyvault, exit code was ${exitCode}`);
+        }
+        const passphrase: string = passphraseStream.getContents().trim();
+        if (!passphrase) {
+            throw new Error("failed to read passphrase from passphraseStream");
+        }
         exeOptions.env["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
 
         tl.debug(`selecting stack ${stackName}`);
