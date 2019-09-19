@@ -5,15 +5,29 @@
     ],
     "jsRules": {},
     "rules": {
+        "comment-format": false,
         "eofline": false,
+        "max-classes-per-file": false,
+        "max-line-length": [
+            true,
+            150
+        ],
         "no-console": false,
-        "ordered-imports": true,
-        "no-string-literal": false,
         "no-floating-promises": [
             true,
             "Q.Promise"
         ],
-        "object-literal-key-quotes": true,
+        "no-string-literal": false,
+        "object-literal-key-quotes": [
+            true,
+            "consistent-as-needed"
+        ],
+        "one-line": [
+            true,
+            "check-open-brace",
+            "check-whitespace"
+        ],
+        "ordered-imports": false,
         "quotemark": [
             false
         ]

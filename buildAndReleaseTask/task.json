@@ -2,7 +2,7 @@
     "id": "0cb9a01a-d8b5-4b77-88b6-c89c4b4eb02d",
     "name": "pulumi-az-remote-pipelines-task",
     "friendlyName": "Pulumi Azure Remote Pipelines Task",
-    "description": "Azure Pipelines task extension for running Pulumi apps where state is managed remotely via blob storage and secrets are configured in key vault.",
+    "description": "Azure Pipelines task extension for running Pulumi apps where state is managed remotely via blob storage and secrets encrypted via a auto generated passphrase stored in key vault.",
     "helpMarkDown": "",
     "category": "Deploy",
     "visibility": [
@@ -13,17 +13,94 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 5
+        "Patch": 25
     },
-    "instanceNameFormat": "Echo $(samplestring)",
+    "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
         {
-            "name": "samplestring",
-            "type": "string",
-            "label": "Sample String",
+            "name": "azureSubscription",
+            "type": "connectedService:AzureRM",
+            "label": "Azure Subscription",
             "defaultValue": "",
             "required": true,
-            "helpMarkDown": "A sample string"
+            "helpMarkDown": "Select the Azure Resource Manager subscription for the deployment."
+        },
+        {
+            "name": "storageAccountName",
+            "type": "string",
+            "label": "State Storage Account Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "Blob Storage account name of the account holding the container that stores the Pulumi State file for Pulumi Stack."
+        },
+        {
+            "name": "containerName",
+            "type": "string",
+            "label": "State Storage Container Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "Name of the Blob Storage Container that stores the Pulumi State file for Pulumi Stack."
+        },
+        {
+            "name": "pulumiVersion",
+            "type": "string",
+            "label": "Pulumi Version",
+            "defaultValue": "latest",
+            "required": true,
+            "helpMarkDown": "The Pulumi version that should be used. If you require a specific version then the format is '1.1.0' or if you just need the latest version then 'latest' can be used."
+        },
+        {
+            "name": "stack",
+            "type": "string",
+            "label": "Stack Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "The Pulumi Stack against which to run the commands. Must only contain alphanumeric characters or dashes and must start with a letter."
+        },
+        {
+            "name": "cmd",
+            "type": "pickList",
+            "label": "Pulumi Command",
+            "defaultValue": "",
+            "helpMarkDown": "For a list of CLI commands and arguments, see [this](https://pulumi.io/reference/commands.html).",
+            "required": true,
+            "properties": {
+                "EditableOptions": "False"
+            },
+            "options": {
+                "stack init": "stack init",
+                "stack": "stack",
+                "config": "config",
+                "preview": "preview",
+                "up": "up",
+                "destroy": "destroy"
+            }
+        },
+        {
+            "name": "keyVaultName",
+            "type": "string",
+            "label": "Key Vault Name",
+            "defaultValue": "",
+            "required": false,
+            "helpMarkDown": "The name of the Key Vault that will hold the auto generated passphrase used to encrypt secrets for the new Pulumi Stack that will be created.",
+            "visibleRule": "cmd = stack init"
+        },
+        {
+            "name": "args",
+            "type": "string",
+            "label": "Command Args",
+            "defaultValue": "",
+            "required": false,
+            "helpMarkDown": "Use space to separate multiple args. For a list of CLI commands and arguments, see [this](https://pulumi.io/reference/commands.html).",
+            "visibleRule": "cmd != stack init"
+        },
+        {
+            "name": "cwd",
+            "type": "filePath",
+            "label": "Working Directory",
+            "defaultValue": "$(System.DefaultWorkingDirectory)",
+            "required": true,
+            "helpMarkDown": "The working directory to set before running the Pulumi command."
         }
     ],
     "execution": {
