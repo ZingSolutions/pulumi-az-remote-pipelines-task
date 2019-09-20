@@ -5,4 +5,4 @@
 .taskkey
 
 node_modules/
-index.js
+*.js
