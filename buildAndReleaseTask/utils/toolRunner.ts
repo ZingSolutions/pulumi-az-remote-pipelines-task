@@ -1,4 +1,4 @@
-import { StringStream } from "models/StringStream";
+import { StringStream } from "../models/StringStream";
 import { IExecOptions } from "azure-pipelines-task-lib/toolrunner";
 
 export function getExecOptions(envArgs?: { [key: string]: string }, workingDirectory?: string, outStream?: StringStream): IExecOptions {

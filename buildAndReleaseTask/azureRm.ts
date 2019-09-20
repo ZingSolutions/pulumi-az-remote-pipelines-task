@@ -1,7 +1,7 @@
-import { IServiceEndpoint } from "models/IServiceEndpoint";
-import { getExecOptions } from "utils/toolRunner";
+import { IServiceEndpoint } from "./models/IServiceEndpoint";
+import { getExecOptions } from "./utils/toolRunner";
+import { StringStream } from "./models/StringStream";
 import * as tl from 'azure-pipelines-task-lib/task';
-import { StringStream } from "models/StringStream";
 
 export async function loginToAzAsync(serviceEndpoint: IServiceEndpoint): Promise<void> {
     const azPath: string = getAzPath();

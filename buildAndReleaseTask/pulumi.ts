@@ -1,11 +1,11 @@
+import { loginToAzAsync, getStorageAccountAccessTokenAsync, setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync } from "./azureRm";
+import { IServiceEndpoint } from "./models/IServiceEndpoint";
+import { InputNames } from "./models/InputNames";
+import { getExecOptions } from "./utils/toolRunner";
 import * as toolLib from "azure-pipelines-tool-lib/tool";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as path from "path";
 import Crypto from "crypto";
-import { loginToAzAsync, getStorageAccountAccessTokenAsync, setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync } from "azureRm";
-import { IServiceEndpoint } from "models/IServiceEndpoint";
-import { InputNames } from "models/InputNames";
-import { getExecOptions } from "utils/toolRunner";
 
 export async function checkPulumiInstallAsync(requiredVersion: string): Promise<void> {
     tl.debug('pulumi install requested');

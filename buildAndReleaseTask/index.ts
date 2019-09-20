@@ -1,6 +1,6 @@
-import { checkPulumiInstallAsync, runPulumiProgramAsync } from 'pulumi';
-import { getServiceEndpoint } from 'utils/serviceEndpoint';
-import { InputNames } from 'models/InputNames';
+import { checkPulumiInstallAsync, runPulumiProgramAsync } from './pulumi';
+import { getServiceEndpoint } from './utils/serviceEndpoint';
+import { InputNames } from './models/InputNames';
 import * as tl from 'azure-pipelines-task-lib/task';
 import Axios from 'axios';
 import path from 'path';

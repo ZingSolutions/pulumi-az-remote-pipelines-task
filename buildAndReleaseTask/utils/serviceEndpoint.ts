@@ -1,5 +1,5 @@
+import { IServiceEndpoint } from '../models/IServiceEndpoint';
 import * as tl from 'azure-pipelines-task-lib/task';
-import { IServiceEndpoint } from 'models/IServiceEndpoint';
 
 export function getServiceEndpoint(connectedServiceName: string): IServiceEndpoint {
     return {
