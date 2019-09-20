@@ -13,10 +13,26 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 27
+        "Patch": 30
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
+        {
+            "name": "pulumiVersion",
+            "type": "string",
+            "label": "Pulumi Version",
+            "defaultValue": "latest",
+            "required": true,
+            "helpMarkDown": "The Pulumi version that should be used. If you require a specific version then the format is '1.1.0' or if you just need the latest version then 'latest' can be used."
+        },
+        {
+            "name": "stack",
+            "type": "string",
+            "label": "Stack Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "The Pulumi Stack against which to run the commands. Must only contain alphanumeric characters or dashes and must start with a letter."
+        },
         {
             "name": "azureSubscription",
             "type": "connectedService:AzureRM",
@@ -42,20 +58,20 @@
             "helpMarkDown": "Name of the Blob Storage Container that stores the Pulumi State file for Pulumi Stack."
         },
         {
-            "name": "pulumiVersion",
+            "name": "keyVaultName",
             "type": "string",
-            "label": "Pulumi Version",
-            "defaultValue": "latest",
-            "required": true,
-            "helpMarkDown": "The Pulumi version that should be used. If you require a specific version then the format is '1.1.0' or if you just need the latest version then 'latest' can be used."
+            "label": "Key Vault Name",
+            "defaultValue": "",
+            "required": false,
+            "helpMarkDown": "The name of the Key Vault that holds the passphrase used to encrypt secrets for the selected Pulumi Stack."
         },
         {
-            "name": "stack",
-            "type": "string",
-            "label": "Stack Name",
-            "defaultValue": "",
+            "name": "cwd",
+            "type": "filePath",
+            "label": "Working Directory",
+            "defaultValue": "$(System.DefaultWorkingDirectory)",
             "required": true,
-            "helpMarkDown": "The Pulumi Stack against which to run the commands. Must only contain alphanumeric characters or dashes and must start with a letter."
+            "helpMarkDown": "The working directory to set before running the Pulumi command."
         },
         {
             "name": "cmd",
@@ -77,15 +93,6 @@
             }
         },
         {
-            "name": "keyVaultName",
-            "type": "string",
-            "label": "Key Vault Name",
-            "defaultValue": "",
-            "required": false,
-            "helpMarkDown": "The name of the Key Vault that will hold the auto generated passphrase used to encrypt secrets for the new Pulumi Stack that will be created.",
-            "visibleRule": "cmd = stack init"
-        },
-        {
             "name": "args",
             "type": "string",
             "label": "Command Args",
@@ -93,14 +100,6 @@
             "required": false,
             "helpMarkDown": "Use space to separate multiple args. For a list of CLI commands and arguments, see [this](https://pulumi.io/reference/commands.html).",
             "visibleRule": "cmd != stack init"
-        },
-        {
-            "name": "cwd",
-            "type": "filePath",
-            "label": "Working Directory",
-            "defaultValue": "$(System.DefaultWorkingDirectory)",
-            "required": true,
-            "helpMarkDown": "The working directory to set before running the Pulumi command."
         }
     ],
     "execution": {
