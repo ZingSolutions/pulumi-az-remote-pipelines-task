@@ -2,7 +2,7 @@
     "manifestVersion": 1,
     "id": "pulumi-az-remote-pipelines-task",
     "name": "Pulumi Azure Remote Pipelines Task",
-    "version": "0.0.30",
+    "version": "0.0.45",
     "publisher": "danhyrjak",
     "targets": [
         {
@@ -18,7 +18,8 @@
     },
     "files": [
         {
-            "path": "buildAndReleaseTask"
+            "path": "buildAndReleaseTask/dist",
+            "packagePath": "buildAndReleaseTask"
         }
     ],
     "contributions": [
