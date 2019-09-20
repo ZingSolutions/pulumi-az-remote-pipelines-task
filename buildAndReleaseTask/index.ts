@@ -2,8 +2,8 @@ import { checkPulumiInstallAsync, runPulumiProgramAsync } from './pulumi';
 import { getServiceEndpoint } from './utils/serviceEndpoint';
 import { InputNames } from './models/InputNames';
 import * as tl from 'azure-pipelines-task-lib/task';
+import * as path from 'path';
 import Axios from 'axios';
-import path from 'path';
 
 // tslint:disable-next-line: no-floating-promises
 (async () => {
