@@ -13,7 +13,7 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 45
+        "Patch": 47
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
@@ -31,7 +31,7 @@
             "label": "Stack Name",
             "defaultValue": "",
             "required": true,
-            "helpMarkDown": "The Pulumi Stack against which to run the commands. Must only contain alphanumeric characters or dashes and must start with a letter."
+            "helpMarkDown": "The Pulumi Stack against which to run the commands. Can only contain alphanumeric characters or dashes and must start with a letter."
         },
         {
             "name": "azureSubscription",
@@ -39,7 +39,7 @@
             "label": "Azure Subscription",
             "defaultValue": "",
             "required": true,
-            "helpMarkDown": "Select the Azure Resource Manager subscription for the deployment."
+            "helpMarkDown": "Select the Azure Resource Manager subscription for the deployment. Note: blob storage used for state and keyvault must be accessiable via this connection."
         },
         {
             "name": "storageAccountName",
@@ -60,7 +60,7 @@
         {
             "name": "keyVaultName",
             "type": "string",
-            "label": "Key Vault Name",
+            "label": "KeyVault Name",
             "defaultValue": "",
             "required": false,
             "helpMarkDown": "The name of the Key Vault that holds the passphrase used to encrypt secrets for the selected Pulumi Stack."

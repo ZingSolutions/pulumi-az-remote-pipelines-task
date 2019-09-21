@@ -5,7 +5,7 @@
   "main": "",
   "scripts": {
     "package": "cd buildAndReleaseTask && npm run tsc && npm run bump-version && cd .. && npm run tfx-create",
-    "start": "cd buildAndReleaseTask && npm run tsc && node dist/index.js",
+    "start": "cd buildAndReleaseTask && npm run tsc && node index.js",
     "lint": "cd buildAndReleaseTask && npm run lint",
     "tfx-create": "tfx extension create --manifest-globs vss-extension.json --rev-version"
   },
