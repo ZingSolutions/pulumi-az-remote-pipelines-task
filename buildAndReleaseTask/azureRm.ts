@@ -66,7 +66,7 @@ export async function getSecretFromKeyVaultAsync(vaultName: string, secretName: 
     const exitCode = await tl.exec(azPath, ["keyvault", "secret", "show",
         "--vault-name", vaultName,
         "--name", secretName,
-        "--query value", "-o", "tsv"],
+        "--query", "value", "-o", "tsv"],
         getExecOptions(undefined, undefined, outStream));
     if (exitCode !== 0) {
         throw new Error(`failed to get secret ${secretName} from keyvault ${vaultName}, exit code was: ${exitCode}`);
