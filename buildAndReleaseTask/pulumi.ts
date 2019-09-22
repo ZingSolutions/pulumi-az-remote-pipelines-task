@@ -1,4 +1,5 @@
-import { loginToAzAsync, getStorageAccountAccessTokenAsync, setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync } from "./azureRm";
+import { loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync, 
+    setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync } from "./azureRm";
 import { IServiceEndpoint } from "./models/IServiceEndpoint";
 import { InputNames } from "./models/InputNames";
 import { getExecOptions } from "./utils/toolRunner";
@@ -56,6 +57,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     const workingDirectory = tl.getInput(InputNames.PULUMI_PROGRAM_DIRECTORY, false) || undefined;
     const cmd: string = tl.getInput(InputNames.PULUMI_COMMAND, true);
     const cmdArgs: string = tl.getInput(InputNames.PULUMI_COMMAND_ARGS, false) || '';
+    const storageAccountAccessKey: string = await getStorageAccountAccessTokenAsync(storageAccountName);
 
     tl.debug('gathering required environment variables to build pulumi exec options');
     const envArgs: { [key: string]: string } = {};
@@ -66,7 +68,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     envArgs["ARM_SUBSCRIPTION_ID"] = serviceEndpoint.subscriptionId;
     //for remote store access
     envArgs["AZURE_STORAGE_ACCOUNT"] = storageAccountName;
-    envArgs["AZURE_STORAGE_KEY"] = await getStorageAccountAccessTokenAsync(storageAccountName);
+    envArgs["AZURE_STORAGE_KEY"] = storageAccountAccessKey;
     //set existing path
     envArgs["PATH"] = process.env["PATH"] || "";
 
@@ -77,11 +79,20 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     }
 
     tl.debug(`command selected ${cmd}`);
-    if (cmd === 'stack init') {
-        //custom command, handle in own way and exit once done
-        await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
-        tl.setResult(tl.TaskResult.Succeeded, "new stack created OK");
-        return;
+    switch(cmd){
+        case 'stack init':
+            //custom command, handle in own way and exit once done
+            await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
+            tl.setResult(tl.TaskResult.Succeeded, "new stack created OK");
+            return;
+        case 'stack exists':
+            const stackExists: boolean = await checkIfBlobExistsAsync(
+                storageAccountName, 
+                storageAccountAccessKey, 
+                containerName, 
+                `.pulumi/stacks/${stackName}.json`);
+            tl.setVariable('STACK_EXISTS', stackExists.toString());
+            return;        
     }
 
     //all other commands follow this flow

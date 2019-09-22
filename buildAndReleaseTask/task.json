@@ -16,8 +16,7 @@
         "Patch": 49
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
-    "inputs": [
-        {
+    "inputs": [{
             "name": "pulumiVersion",
             "type": "string",
             "label": "Pulumi Version",
@@ -85,10 +84,10 @@
             },
             "options": {
                 "stack init": "stack init",
-                "stack": "stack",
+                "stack": "stack exists",
                 "config": "config",
-                "preview": "preview",
                 "up": "up",
+                "preview": "preview",
                 "destroy": "destroy"
             }
         },

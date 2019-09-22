@@ -74,6 +74,36 @@ export async function getSecretFromKeyVaultAsync(vaultName: string, secretName: 
     return outStream.getLastLine() || "";
 }
 
+export async function checkIfBlobExistsAsync(
+    accountName: string,
+    accountAccessKey: string,
+    containerName: string,
+    blobName: string): Promise<boolean> {
+    const azPath: string = getAzPath();
+    const outStream: StringStream = new StringStream();
+    const exitCode = await tl.exec(azPath, ["storage", "blob", "exists",
+        "--account-name", accountName,
+        "--account-key", accountAccessKey,
+        "--container-name", containerName,
+        "--name", blobName, "-o", "tsv"],
+        getExecOptions(undefined, undefined, outStream));
+    if (exitCode !== 0) {
+        throw new Error(`failed to query az to check if blob ${blobName}
+        exists in container ${containerName} under account ${accountName}, exit code was: ${exitCode}`);
+    }
+    const res: string = outStream.getLastLine();
+    switch (res) {
+        case "True":
+            return true;
+        case "False":
+            return false;
+        default:
+            throw new Error(`unexpected result when checking if blob ${blobName}
+            exist in container ${containerName} under account ${accountName}.
+            Expecting "True" or "False" instead recieved ${res}`);
+    }
+}
+
 function getAzPath(): string {
     tl.debug('get az tool path');
     return tl.which('az', true);
