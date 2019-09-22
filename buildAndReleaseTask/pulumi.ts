@@ -1,4 +1,4 @@
-import { loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync, 
+import { loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync,
     setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync } from "./azureRm";
 import { IServiceEndpoint } from "./models/IServiceEndpoint";
 import { InputNames } from "./models/InputNames";
@@ -79,7 +79,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     }
 
     tl.debug(`command selected ${cmd}`);
-    switch(cmd){
+    switch (cmd) {
         case 'stack init':
             //custom command, handle in own way and exit once done
             await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
@@ -87,12 +87,12 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
             return;
         case 'stack exists':
             const stackExists: boolean = await checkIfBlobExistsAsync(
-                storageAccountName, 
-                storageAccountAccessKey, 
-                containerName, 
+                storageAccountName,
+                storageAccountAccessKey,
+                containerName,
                 `.pulumi/stacks/${stackName}.json`);
             tl.setVariable('STACK_EXISTS', stackExists.toString());
-            return;        
+            return;
     }
 
     //all other commands follow this flow
