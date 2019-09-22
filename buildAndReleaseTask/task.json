@@ -13,7 +13,7 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 50
+        "Patch": 51
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
@@ -62,7 +62,7 @@
             "type": "string",
             "label": "KeyVault Name",
             "defaultValue": "",
-            "required": false,
+            "required": true,
             "helpMarkDown": "The name of the Key Vault that holds the passphrase used to encrypt secrets for the selected Pulumi Stack."
         },
         {
@@ -85,7 +85,7 @@
             },
             "options": {
                 "stack init": "stack init",
-                "stack": "stack exists",
+                "stack exists": "stack exists",
                 "config": "config",
                 "up": "up",
                 "preview": "preview",
