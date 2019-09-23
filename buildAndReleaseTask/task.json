@@ -13,7 +13,7 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 51
+        "Patch": 53
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
@@ -60,7 +60,7 @@
         {
             "name": "keyVaultName",
             "type": "string",
-            "label": "KeyVault Name",
+            "label": "Key Vault Name",
             "defaultValue": "",
             "required": true,
             "helpMarkDown": "The name of the Key Vault that holds the passphrase used to encrypt secrets for the selected Pulumi Stack."
@@ -99,7 +99,7 @@
             "defaultValue": "",
             "required": false,
             "helpMarkDown": "Use space to separate multiple args. For a list of CLI commands and arguments, see [this](https://pulumi.io/reference/commands.html).",
-            "visibleRule": "cmd != stack init"
+            "visibleRule": "cmd != stack init && cmd != stack exists"
         }
     ],
     "execution": {
