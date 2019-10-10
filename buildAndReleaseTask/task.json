@@ -78,7 +78,7 @@
             "type": "pickList",
             "label": "Pulumi Command",
             "defaultValue": "",
-            "helpMarkDown": "For a list of CLI commands and arguments, see [this](https://pulumi.io/reference/commands.html).",
+            "helpMarkDown": "The pulumi command to run, possible options are:\n- **stack init** - initilises a new stack, with a new secret stored in keyvault to encrypt secrets. On success will create new stack.Pulumi file in working directory. Note: will error if stack already exists in azure storage backend store *(use stack exists command to check for existing stack first)*.\n- **stack exists** - checks if the given stack exists in the remote blob storage account. Will write the result (either `'true'` or `'false'`) to the job level environment vairiable named in the Output Variable setting, defaults to `STACK_EXISTS_RESULT`.\n- **update config** - loops over all environment variables for the current job. For any environment variable that is prefixed with the Config Prefix setting, defaults to `PULUMI_`, will write the name (excluding the prefix) and value as a config option for the given stack. Note: if the variable is marked as secret this will be written as secret in the config as well. Once complete will set the status of this action to the job level environment variable named in the Output Variable setting, defaults to `STACK_CONFIG_UPDATE_RESULT`. Possible values are `'some_change'` or `'no_change'`.\n- **preview** - runs the pulumi [preview](https://www.pulumi.com/docs/reference/cli/pulumi_preview/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the preview command will also be written to disk at the given filePath.\n- **up** - runs the pulumi [up](https://www.pulumi.com/docs/reference/cli/pulumi_up/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the up command will also be written to disk at the given filePath.\n- **destroy** - runs the pulumi [destroy](https://www.pulumi.com/docs/reference/cli/pulumi_destroy/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the destroy command will also be written to disk at the given filePath.",
             "required": true,
             "properties": {
                 "EditableOptions": "False"
@@ -86,9 +86,9 @@
             "options": {
                 "stack init": "stack init",
                 "stack exists": "stack exists",
-                "config": "config",
-                "up": "up",
+                "update config": "update config",
                 "preview": "preview",
+                "up": "up",
                 "destroy": "destroy"
             }
         },
@@ -98,8 +98,53 @@
             "label": "Command Args",
             "defaultValue": "",
             "required": false,
-            "helpMarkDown": "Use space to separate multiple args. For a list of CLI commands and arguments, see [this](https://pulumi.io/reference/commands.html).",
-            "visibleRule": "cmd != stack init && cmd != stack exists"
+            "helpMarkDown": "Use space to separate multiple args. For a list of CLI commands with supported arguments, see [this](https://pulumi.io/reference/commands.html).",
+            "visibleRule": "cmd = preview || cmd = up || cmd = destroy"
+        },
+        {
+            "name": "stackExistsOutputVariable",
+            "type": "string",
+            "label": "Output Variable",
+            "defaultValue": "STACK_EXISTS_RESULT",
+            "required": false,
+            "helpMarkDown": "the name of the job level environment variable that will store the result of the check. Possible values are: 'true' or 'false'",
+            "visibleRule": "cmd = stack exists"
+        },
+        {
+            "name": "configSettingsPrefix",
+            "type": "string",
+            "label": "Config Prefix",
+            "defaultValue": "PULUMI_",
+            "required": false,
+            "helpMarkDown": "settings with this given prefix will be saved into the stacks config using the value from the current job environment.",
+            "visibleRule": "cmd = update config"
+        },
+        {
+            "name": "configOutputVariable",
+            "type": "string",
+            "label": "Output Variable",
+            "defaultValue": "STACK_CONFIG_UPDATE_RESULT",
+            "required": false,
+            "helpMarkDown": "the name of the job level environment variable that will store the result of the update. Possible values are: 'some_change' or 'no_change'",
+            "visibleRule": "cmd = update config"
+        },
+        {
+            "name": "writeCmdOutputToDisk",
+            "type": "boolean",
+            "label": "Output FilePath",
+            "defaultValue": false,
+            "required": false,
+            "helpMarkDown": "Set to true to log the output of the pulumi command to disk.",
+            "visibleRule": "cmd = preview || cmd = up || cmd = destroy"
+        },
+        {
+            "name": "cmdOutputFilePath",
+            "type": "filePath",
+            "label": "Output FilePath",
+            "defaultValue": "$(Agent.TempDirectory)/$(cmd).log",
+            "required": false,
+            "helpMarkDown": "The full filePath to a file to write the output of this command to. Note: file will be overwritten if already exists.",
+            "visibleRule": "writeCmdOutputToDisk = true"
         }
     ],
     "execution": {
