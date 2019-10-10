@@ -1,7 +1,7 @@
 import {
     loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync,
     setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync,
-    createBlobAsync, lockBlobAsync, unlockBlobAsync
+    createBlobAsync, lockBlobAsync, unlockBlobAsync,
 } from "./azureRm";
 import { IServiceEndpoint } from "./models/IServiceEndpoint";
 import { InputNames } from "./models/InputNames";
@@ -85,7 +85,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     }
 
     tl.debug(`command selected ${cmd}`);
-    let saveOutputToFilePath: string | undefined = undefined;
+    let saveOutputToFilePath: string | undefined;
     let isUpdateConfigCmd: boolean = false;
     let updateConfigSettingPrefix: string = '';
     let updateConfigOutVarName: string = '';
@@ -101,7 +101,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
             await fs.writeFile(localLockFullPath, 'lockfile');
             console.log('creating new stack.');
             await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
-            console.log('stack created OK. creating lock file in blob storage.')
+            console.log('stack created OK. creating lock file in blob storage.');
             await createBlobAsync(
                 storageAccountName,
                 storageAccountAccessKey,
@@ -184,7 +184,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
         if (cmdArgs) {
             cmdToRun = `${cmd} ${cmdArgs}`;
         }
-        let cmdOutStream: StringStream | undefined = undefined;
+        let cmdOutStream: StringStream | undefined;
         if (saveOutputToFilePath) {
             cmdOutStream = new StringStream();
         }
@@ -199,14 +199,14 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
             const lines: string = cmdOutStream.getLines().join('\n');
             process.stdout.write(lines);
             console.log(`writing results to file: ${saveOutputToFilePath}`);
-            fs.writeFile(saveOutputToFilePath, lines);
+            await fs.writeFile(saveOutputToFilePath, lines);
         }
     }
     finally {
         //unlock
         if (lockLeaseId) {
             try {
-                unlockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, lockBlobName, lockLeaseId);
+                await unlockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, lockBlobName, lockLeaseId);
             }
             catch (err) {
                 console.error('failed to unlock blob');
