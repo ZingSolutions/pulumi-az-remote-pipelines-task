@@ -10,8 +10,7 @@ import * as toolLib from "azure-pipelines-tool-lib/tool";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as path from "path";
 import * as Crypto from "crypto";
-import { promises as fs } from 'fs';
-import { StringStream } from "models/StringStream";
+import { StringStream } from "./models/StringStream";
 import { IExecOptions } from "azure-pipelines-task-lib/toolrunner";
 
 export async function checkPulumiInstallAsync(requiredVersion: string): Promise<void> {
@@ -98,7 +97,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
             }
             const localLockFullPath: string = path.join(tempDirectory, 'stack.lock');
             console.log('creating local lock file');
-            await fs.writeFile(localLockFullPath, 'lockfile');
+            tl.writeFile(localLockFullPath, 'lockfile');
             console.log('creating new stack.');
             await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
             console.log('stack created OK. creating lock file in blob storage.');
@@ -166,11 +165,16 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
             console.log(`getting variables prefixed with ${updateConfigSettingPrefix}`);
             const vars = tl.getVariables();
             for (let i = 0, l = vars.length; i < l; i++) {
-                const varName = vars[i].name.substr(varStartIndex);
-                const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
-                if (vars[i].value !== currentVal) {
-                    configHasChanged = true;
-                    await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
+                if (vars[i].name.toUpperCase().startsWith(updateConfigSettingPrefix)) {
+                    const varName = vars[i].name.substr(varStartIndex);
+                    const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
+                    if (vars[i].value !== currentVal) {
+                        console.log('config value is different');
+                        console.log(`was: ${currentVal}`);
+                        console.log(`now: ${vars[i].value}`);
+                        configHasChanged = true;
+                        await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
+                    }
                 }
             }
             tl.setVariable(updateConfigOutVarName, configHasChanged ? "some_change" : "no_change");
@@ -199,7 +203,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
             const lines: string = cmdOutStream.getLines().join('\n');
             process.stdout.write(lines);
             console.log(`writing results to file: ${saveOutputToFilePath}`);
-            await fs.writeFile(saveOutputToFilePath, lines);
+            tl.writeFile(saveOutputToFilePath, lines);
         }
     }
     finally {
@@ -265,9 +269,10 @@ async function getConfigValueAsync(
     const outStream: StringStream = new StringStream();
     const exitCode = await tl.exec(pulumiPath, ['config', 'get', key], getExecOptions(envArgs, workingDirectory, outStream));
     if (exitCode !== 0) {
-        throw new Error(`Pulumi config get ${key} failed, exit code was: ${exitCode}`);
+        console.warn(`failed to get config value ${key}, exit code was: ${exitCode}`);
+        return '';
     }
-    return outStream.getLines().join('\n');
+    return outStream.getLastLine();
 }
 
 async function setConfigValueAsync(

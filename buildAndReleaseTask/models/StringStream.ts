@@ -19,8 +19,8 @@ export class StringStream extends Stream.Writable {
     }
 
     public getLastLine(): string {
-        return this.lines && this.lines.length > 0
-            ? this.lines[this.lines.length - 1]
+        return this.lines && this.lines.length > 0 && this.lines[this.lines.length - 1]
+            ? this.lines[this.lines.length - 1].trim()
             : "";
     }
 }
