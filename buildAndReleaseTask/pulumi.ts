@@ -200,20 +200,10 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
 
         if (saveOutputToFilePath && cmdOutStream) {
             console.log('echoing results to console');
-            const lines: string[] = cmdOutStream.getLines();
-            let linesToWrite: string = '';
-            let lineSpacer: string = '';
-            for (let i = 0, l = lines.length; i < l; i++) {
-                //ignore initial command line and last permalink line
-                if (!lines[i].trim().startsWith("[command]")
-                    && !lines[i].trim().startsWith("Permalink:")) {
-                    linesToWrite += lineSpacer + lines[i];
-                    lineSpacer = '\n';
-                }
-            }
-            process.stdout.write(lines.join('\n'));
+            const lines: string = cmdOutStream.getLines().join('\n');
+            process.stdout.write(lines);
             console.log(`writing results to file: ${saveOutputToFilePath}`);
-            tl.writeFile(saveOutputToFilePath, linesToWrite);
+            tl.writeFile(saveOutputToFilePath, lines);
         }
     }
     finally {
