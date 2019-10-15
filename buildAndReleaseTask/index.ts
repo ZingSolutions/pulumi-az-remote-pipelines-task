@@ -18,12 +18,12 @@ import Axios from 'axios';
             Name must only contain alphanumeric characters or dashes and must start with a letter.`);
         }
 
-        //validate rm service
-        tl.debug('checking specified azure subscription has service endpoint configured ...');
-        const connectedServiceName = tl.getInput(InputNames.AZURE_SUBSCRIPTION, true);
-        tl.debug(`azureSubscription: ${connectedServiceName}`);
-        const serviceEndpoint = getServiceEndpoint(connectedServiceName);
-        tl.debug(`service endpoint retrieved with client ID ${serviceEndpoint.clientId}`);
+        //validate rm services
+        tl.debug('checking specified azure subscriptions have service endpoint configured ...');
+        const remoteStoreAndVaultServiceEndpoint = getServiceEndpoint(tl.getInput(InputNames.AZURE_SUBSCRIPTION_REMOTE_STORE_AND_VAULT, true));
+        tl.debug(`remote store and vault service endpoint retrieved with client ID ${remoteStoreAndVaultServiceEndpoint.clientId}`);
+        const deploymentServiceEndpoint = getServiceEndpoint(tl.getInput(InputNames.AZURE_SUBSCRIPTION_DEPLOYMENT, true));
+        tl.debug(`remote store and vault service endpoint retrieved with client ID ${deploymentServiceEndpoint.clientId}`);
 
         //validate pulumi verison
         tl.debug('verifying pulumi install');
@@ -49,7 +49,7 @@ import Axios from 'axios';
         await checkPulumiInstallAsync(pulumiVersion);
 
         tl.debug('pulumi installed, about to run pulumi program');
-        await runPulumiProgramAsync(stackName, serviceEndpoint);
+        await runPulumiProgramAsync(stackName, remoteStoreAndVaultServiceEndpoint, deploymentServiceEndpoint);
 
         tl.setResult(tl.TaskResult.Succeeded, "pulumi progam complete");
     } catch (err) {

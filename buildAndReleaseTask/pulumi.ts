@@ -47,9 +47,13 @@ export async function checkPulumiInstallAsync(requiredVersion: string): Promise<
     tl.setVariable(variableName, requiredVersion);
 }
 
-export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: IServiceEndpoint): Promise<void> {
+export async function runPulumiProgramAsync(
+    stackName: string,
+    remoteStoreAndVaultServiceEndpoint: IServiceEndpoint,
+    deploymentServiceEndpoint: IServiceEndpoint): Promise<void> {
+
     //login to az (required to get storage access key & key vault access)
-    await loginToAzAsync(serviceEndpoint);
+    await loginToAzAsync(remoteStoreAndVaultServiceEndpoint);
 
     tl.debug('referencing pulumi and logging out version in use to console');
     const pulumiPath = getPulumiPath();
@@ -67,10 +71,10 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     tl.debug('gathering required environment variables to build pulumi exec options');
     const envArgs: { [key: string]: string } = {};
     //for AZ CLI access via pulumi
-    envArgs["ARM_CLIENT_ID"] = serviceEndpoint.clientId;
-    envArgs["ARM_CLIENT_SECRET"] = serviceEndpoint.servicePrincipalKey;
-    envArgs["ARM_TENANT_ID"] = serviceEndpoint.tenantId;
-    envArgs["ARM_SUBSCRIPTION_ID"] = serviceEndpoint.subscriptionId;
+    envArgs["ARM_CLIENT_ID"] = deploymentServiceEndpoint.clientId;
+    envArgs["ARM_CLIENT_SECRET"] = deploymentServiceEndpoint.servicePrincipalKey;
+    envArgs["ARM_TENANT_ID"] = deploymentServiceEndpoint.tenantId;
+    envArgs["ARM_SUBSCRIPTION_ID"] = deploymentServiceEndpoint.subscriptionId;
     //for remote store access
     envArgs["AZURE_STORAGE_ACCOUNT"] = storageAccountName;
     envArgs["AZURE_STORAGE_KEY"] = storageAccountAccessKey;

@@ -13,7 +13,7 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 66
+        "Patch": 67
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
@@ -26,20 +26,12 @@
             "helpMarkDown": "The Pulumi version that should be used. If you require a specific version then the format is '1.1.0' or if you just need the latest version then 'latest' can be used."
         },
         {
-            "name": "stack",
-            "type": "string",
-            "label": "Stack Name",
-            "defaultValue": "",
-            "required": true,
-            "helpMarkDown": "The Pulumi Stack against which to run the commands. Can only contain alphanumeric characters or dashes and must start with a letter."
-        },
-        {
-            "name": "azureSubscription",
+            "name": "azureSubscriptionRemoteStoreAndVault",
             "type": "connectedService:AzureRM",
-            "label": "Azure Subscription",
+            "label": "Azure Subscription (Remote Storage & Key Vault)",
             "defaultValue": "",
             "required": true,
-            "helpMarkDown": "Select the Azure Resource Manager subscription for the deployment. Note: blob storage used for state and keyvault must be accessiable via this connection."
+            "helpMarkDown": "Select the Azure Resource Manager subscription that has access to the blob storage account used for remote state storage and the key vault account used to hold encryption secrets."
         },
         {
             "name": "storageAccountName",
@@ -64,6 +56,22 @@
             "defaultValue": "",
             "required": true,
             "helpMarkDown": "The name of the Key Vault that holds the passphrase used to encrypt secrets for the selected Pulumi Stack."
+        },
+        {
+            "name": "stack",
+            "type": "string",
+            "label": "Stack Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "The Pulumi Stack against which to run the commands. Can only contain alphanumeric characters or dashes and must start with a letter."
+        },
+        {
+            "name": "azureSubscriptionDeployment",
+            "type": "connectedService:AzureRM",
+            "label": "Azure Subscription (Deployments)",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "Select the Azure Resource Manager subscription that has access to deploy and destroy the resources created by your Pulumi program."
         },
         {
             "name": "cwd",
