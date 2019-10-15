@@ -1,5 +1,8 @@
-import { loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync,
-    setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync } from "./azureRm";
+import {
+    loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync,
+    setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync,
+    createBlobAsync, lockBlobAsync, unlockBlobAsync,
+} from "./azureRm";
 import { IServiceEndpoint } from "./models/IServiceEndpoint";
 import { InputNames } from "./models/InputNames";
 import { getExecOptions } from "./utils/toolRunner";
@@ -7,6 +10,8 @@ import * as toolLib from "azure-pipelines-tool-lib/tool";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as path from "path";
 import * as Crypto from "crypto";
+import { StringStream } from "./models/StringStream";
+import { IExecOptions } from "azure-pipelines-task-lib/toolrunner";
 
 export async function checkPulumiInstallAsync(requiredVersion: string): Promise<void> {
     tl.debug('pulumi install requested');
@@ -54,7 +59,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     const storageAccountName: string = tl.getInput(InputNames.STORE_ACCOUNT_NAME, true);
     const containerName: string = tl.getInput(InputNames.STORE_CONTAINER_NAME, true);
     const keyVaultName: string = tl.getInput(InputNames.SECRET_KEY_VAULT_NAME, true);
-    const workingDirectory = tl.getInput(InputNames.PULUMI_PROGRAM_DIRECTORY, false) || undefined;
+    const workingDirectory = tl.getPathInput(InputNames.PULUMI_PROGRAM_DIRECTORY, false) || undefined;
     const cmd: string = tl.getInput(InputNames.PULUMI_COMMAND, true);
     const cmdArgs: string = tl.getInput(InputNames.PULUMI_COMMAND_ARGS, false) || '';
     const storageAccountAccessKey: string = await getStorageAccountAccessTokenAsync(storageAccountName);
@@ -79,45 +84,142 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     }
 
     tl.debug(`command selected ${cmd}`);
+    let saveOutputToFilePath: string | undefined;
+    let isUpdateConfigCmd: boolean = false;
+    let updateConfigSettingPrefix: string = '';
+    let updateConfigOutVarName: string = '';
     switch (cmd) {
         case 'stack init':
             //custom command, handle in own way and exit once done
+            const tempDirectory: string | undefined = process.env['AGENT_TEMPDIRECTORY'];
+            if (!tempDirectory || !tempDirectory.trim()) {
+                throw new Error('AGENT_TEMPDIRECTORY environment variable is not set');
+            }
+            const localLockFullPath: string = path.join(tempDirectory, 'stack.lock');
+            console.log('creating local lock file');
+            tl.writeFile(localLockFullPath, 'lockfile');
+            console.log('creating new stack.');
             await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
+            console.log('stack created OK. creating lock file in blob storage.');
+            await createBlobAsync(
+                storageAccountName,
+                storageAccountAccessKey,
+                containerName,
+                getLockBlobName(stackName),
+                localLockFullPath);
+            console.log('stack lock file created OK.');
             tl.setResult(tl.TaskResult.Succeeded, "new stack created OK");
             return;
         case 'stack exists':
+            const stackExistsOutVarName = tl.getInput(InputNames.STACK_EXISTS_OUTPUT_VAR_NAME, true);
             const stackExists: boolean = await checkIfBlobExistsAsync(
                 storageAccountName,
                 storageAccountAccessKey,
                 containerName,
                 `.pulumi/stacks/${stackName}.json`);
-            tl.setVariable('STACK_EXISTS', stackExists.toString());
+            tl.setVariable(stackExistsOutVarName, stackExists.toString());
             return;
+        case 'update config':
+            isUpdateConfigCmd = true;
+            updateConfigSettingPrefix = tl.getInput(InputNames.UPDATE_CONFIG_SETTINGS_PREFIX, true);
+            updateConfigOutVarName = tl.getInput(InputNames.UPDATE_CONFIG_OUTPUT_VAR_NAME, true);
+            break;
+        case 'preview':
+        case 'up':
+        case 'destroy':
+            if (tl.getBoolInput(InputNames.PULUMI_COMMAND_OUTPUT_TO_DISK_BOOLEAN, false)) {
+                saveOutputToFilePath = tl.getPathInput(InputNames.PULUMI_COMMAND_OUTPUT_FILE_PATH, true);
+            }
+            break;
+        default:
+            throw new Error(`unexpected command: ${cmd}`);
     }
 
-    //all other commands follow this flow
-    tl.debug('getting passphrase for stack from keyvault');
-    const passphrase: string = await getSecretFromKeyVaultAsync(keyVaultName, stackName);
-    if (!passphrase) {
-        throw new Error(`failed to read passphrase for stack ${stackName} from keyvault ${keyVaultName}`);
-    }
-    envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
+    // commands that get here run on the pulumi state and may alter it.
+    // preform a lock now, and unlock once done.
 
-    tl.debug(`selecting stack ${stackName}`);
-    exitCode = await tl.exec(pulumiPath, ['stack', 'select', stackName], getExecOptions(envArgs, workingDirectory));
-    if (exitCode !== 0) {
-        throw new Error(`Pulumi stack select ${stackName} failed, exit code was: ${exitCode}`);
-    }
+    //lock
+    const lockBlobName: string = getLockBlobName(stackName);
+    const lockLeaseId: string = await lockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, lockBlobName);
 
-    tl.debug('build pulumi command to run');
-    let cmdToRun: string = cmd;
-    if (cmdArgs) {
-        cmdToRun = `${cmd} ${cmdArgs}`;
+    //do work
+    try {
+        tl.debug('getting passphrase for stack from keyvault');
+        const passphrase: string = await getSecretFromKeyVaultAsync(keyVaultName, stackName);
+        if (!passphrase) {
+            throw new Error(`failed to read passphrase for stack ${stackName} from keyvault ${keyVaultName}`);
+        }
+        envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
+
+        tl.debug(`selecting stack ${stackName}`);
+        const cmdExeOptions = getExecOptions(envArgs, workingDirectory);
+        exitCode = await tl.exec(pulumiPath, ['stack', 'select', stackName], cmdExeOptions);
+        if (exitCode !== 0) {
+            throw new Error(`Pulumi stack select ${stackName} failed, exit code was: ${exitCode}`);
+        }
+
+        if (isUpdateConfigCmd) {
+            updateConfigSettingPrefix = updateConfigSettingPrefix.toUpperCase();
+            const varStartIndex = updateConfigSettingPrefix.length;
+            let configHasChanged: boolean = false;
+            console.log(`getting variables prefixed with ${updateConfigSettingPrefix}`);
+            const vars = tl.getVariables();
+            for (let i = 0, l = vars.length; i < l; i++) {
+                if (vars[i].name.toUpperCase().startsWith(updateConfigSettingPrefix)) {
+                    const varName = vars[i].name.substr(varStartIndex);
+                    const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
+                    if (vars[i].value !== currentVal) {
+                        console.log(`config value is different for ${varName}`);
+                        configHasChanged = true;
+                        await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
+                    }
+                }
+            }
+            tl.setVariable(updateConfigOutVarName, configHasChanged ? "some_change" : "no_change");
+            console.log(`config has ${configHasChanged ? 'some' : 'no'} changes`);
+            return;
+        }
+
+        //run other command (preview/up/destroy)
+        tl.debug('build pulumi command to run');
+        let cmdToRun: string = cmd;
+        if (cmdArgs) {
+            cmdToRun = `${cmd} ${cmdArgs}`;
+        }
+        let cmdOutStream: StringStream | undefined;
+        if (saveOutputToFilePath) {
+            cmdOutStream = new StringStream();
+        }
+        exitCode = await tl.tool(pulumiPath).line(cmdToRun).exec(getExecOptions(envArgs, workingDirectory, cmdOutStream));
+        if (exitCode !== 0) {
+            throw new Error(`running pulumi command ${cmdToRun} failed, exit code was: ${exitCode}`);
+        }
+        console.log('command run OK.');
+
+        if (saveOutputToFilePath && cmdOutStream) {
+            console.log('echoing results to console');
+            const lines: string = cmdOutStream.getLines().join('\n');
+            process.stdout.write(lines);
+            console.log(`writing results to file: ${saveOutputToFilePath}`);
+            tl.writeFile(saveOutputToFilePath, lines);
+        }
     }
-    exitCode = await tl.tool(pulumiPath).line(cmdToRun).exec(getExecOptions(envArgs, workingDirectory));
-    if (exitCode !== 0) {
-        throw new Error(`running pulumi command ${cmdToRun} failed, exit code was: ${exitCode}`);
+    finally {
+        //unlock
+        if (lockLeaseId) {
+            try {
+                await unlockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, lockBlobName, lockLeaseId);
+            }
+            catch (err) {
+                console.error('failed to unlock blob');
+                console.error(err);
+            }
+        }
     }
+}
+
+function getLockBlobName(stackName: string) {
+    return `state-locks/${stackName}.lock`;
 }
 
 async function installPulumiWindowsAsync(version: string): Promise<void> {
@@ -154,6 +256,32 @@ async function initNewStackAsync(
         getExecOptions(envArgs, workingDirectory));
     if (exitCode !== 0) {
         throw new Error(`Pulumi Command: stack init ${stackName} --secrets-provider passphrase failed, exit code was: ${exitCode}`);
+    }
+}
+
+async function getConfigValueAsync(
+    key: string,
+    pulumiPath: string,
+    envArgs: { [key: string]: string },
+    workingDirectory?: string): Promise<string> {
+    const outStream: StringStream = new StringStream();
+    const exitCode = await tl.exec(pulumiPath, ['config', 'get', key], getExecOptions(envArgs, workingDirectory, outStream));
+    if (exitCode !== 0) {
+        console.warn(`failed to get config value ${key}, exit code was: ${exitCode}`);
+        return '';
+    }
+    return outStream.getLastLine();
+}
+
+async function setConfigValueAsync(
+    pulumiPath: string,
+    cmdExeOptions: IExecOptions,
+    key: string,
+    value: string,
+    encryptValue: boolean) {
+    const exitCode = await tl.exec(pulumiPath, ['config', 'set', encryptValue ? '--secret' : '--plaintext', key, value], cmdExeOptions);
+    if (exitCode !== 0) {
+        throw new Error(`Pulumi config set ${key} ${encryptValue ? '--secret' : '--plaintext'} failed, exit code was: ${exitCode}`);
     }
 }
 

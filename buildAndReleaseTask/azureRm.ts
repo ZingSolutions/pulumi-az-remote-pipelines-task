@@ -104,6 +104,82 @@ export async function checkIfBlobExistsAsync(
     }
 }
 
+/**
+ * Wiil create a new blob with the given parameters.
+ * Note: if a blob already exists in the same location a overwrite will be attempted.
+ */
+export async function createBlobAsync(
+    accountName: string,
+    accountAccessKey: string,
+    containerName: string,
+    blobName: string,
+    localFilePath: string): Promise<void> {
+    const azPath: string = getAzPath();
+    const outStream: StringStream = new StringStream();
+    const exitCode = await tl.exec(azPath, ["storage", "blob", "upload",
+        "--account-name", accountName,
+        "--account-key", accountAccessKey,
+        "--container-name", containerName,
+        "--file", localFilePath,
+        "--name", blobName, "-o", "tsv"],
+        getExecOptions(undefined, undefined, outStream));
+    if (exitCode !== 0) {
+        throw new Error(`failed to use az to create blob ${blobName}
+        in container ${containerName} under account ${accountName}, exit code was: ${exitCode}`);
+    }
+}
+
+/**
+ * attempts to create a new lease for the
+ * given blob and returns the new lease id.
+ */
+export async function lockBlobAsync(
+    accountName: string,
+    accountAccessKey: string,
+    containerName: string,
+    blobName: string): Promise<string> {
+    const azPath: string = getAzPath();
+    const outStream: StringStream = new StringStream();
+    const exitCode = await tl.exec(azPath, ["storage", "blob", "lease", "acquire",
+        "--account-name", accountName,
+        "--account-key", accountAccessKey,
+        "--container-name", containerName,
+        "--lease-duration", -1,
+        "--blob-name", blobName, "-o", "tsv"],
+        getExecOptions(undefined, undefined, outStream));
+    if (exitCode !== 0) {
+        throw new Error(`failed to use az to lease blob ${blobName}
+        in container ${containerName} under account ${accountName}, exit code was: ${exitCode}`);
+    }
+    const leaseKey = outStream.getLastLine();
+    if (leaseKey && leaseKey.trim()) {
+        return leaseKey.trim();
+    }
+    throw new Error(`failed to use az to lease blob ${blobName}
+        in container ${containerName} under account ${accountName}, lease key was missing from output stream`);
+}
+
+export async function unlockBlobAsync(
+    accountName: string,
+    accountAccessKey: string,
+    containerName: string,
+    blobName: string,
+    leaseId: string): Promise<void> {
+    const azPath: string = getAzPath();
+    const outStream: StringStream = new StringStream();
+    const exitCode = await tl.exec(azPath, ["storage", "blob", "lease", "release",
+        "--account-name", accountName,
+        "--account-key", accountAccessKey,
+        "--container-name", containerName,
+        "--lease-id", leaseId,
+        "--blob-name", blobName, "-o", "tsv"],
+        getExecOptions(undefined, undefined, outStream));
+    if (exitCode !== 0) {
+        throw new Error(`failed to use az to release lease ${leaseId} from blob ${blobName}
+        in container ${containerName} under account ${accountName}, exit code was: ${exitCode}`);
+    }
+}
+
 function getAzPath(): string {
     tl.debug('get az tool path');
     return tl.which('az', true);
