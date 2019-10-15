@@ -169,9 +169,7 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
                     const varName = vars[i].name.substr(varStartIndex);
                     const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
                     if (vars[i].value !== currentVal) {
-                        console.log('config value is different');
-                        console.log(`was: ${currentVal}`);
-                        console.log(`now: ${vars[i].value}`);
+                        console.log(`config value is different for ${varName}`);
                         configHasChanged = true;
                         await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
                     }
