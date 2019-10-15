@@ -90,7 +90,7 @@ export async function runPulumiProgramAsync(
     tl.debug(`command selected ${cmd}`);
     let saveOutputToFilePath: string | undefined;
     let isUpdateConfigCmd: boolean = false;
-    let updateConfigSettingPrefix: string = '';
+    let updateConfigSettingPrefixs: string[] = [];
     let updateConfigOutVarName: string = '';
     switch (cmd) {
         case 'stack init':
@@ -125,7 +125,9 @@ export async function runPulumiProgramAsync(
             return;
         case 'update config':
             isUpdateConfigCmd = true;
-            updateConfigSettingPrefix = tl.getInput(InputNames.UPDATE_CONFIG_SETTINGS_PREFIX, true);
+            updateConfigSettingPrefixs =
+                tl.getInput(InputNames.UPDATE_CONFIG_SETTINGS_PREFIX, true)
+                    .split(',').filter((e) => e && e.trim()).map((e) => e.trim().toUpperCase());
             updateConfigOutVarName = tl.getInput(InputNames.UPDATE_CONFIG_OUTPUT_VAR_NAME, true);
             break;
         case 'preview':
@@ -163,22 +165,25 @@ export async function runPulumiProgramAsync(
         }
 
         if (isUpdateConfigCmd) {
-            updateConfigSettingPrefix = updateConfigSettingPrefix.toUpperCase();
-            const varStartIndex = updateConfigSettingPrefix.length;
             let configHasChanged: boolean = false;
-            console.log(`getting variables prefixed with ${updateConfigSettingPrefix}`);
             const vars = tl.getVariables();
-            for (let i = 0, l = vars.length; i < l; i++) {
-                if (vars[i].name.toUpperCase().startsWith(updateConfigSettingPrefix)) {
-                    const varName = vars[i].name.substr(varStartIndex);
-                    const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
-                    if (vars[i].value !== currentVal) {
-                        console.log(`config value is different for ${varName}`);
-                        configHasChanged = true;
-                        await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
+            //process variables for each requested prefix
+            for (const prefix of updateConfigSettingPrefixs) {
+                const varStartIndex = prefix.length;
+                console.log(`getting variables prefixed with ${prefix}`);
+                for (let i = 0, l = vars.length; i < l; i++) {
+                    if (vars[i].name.toUpperCase().startsWith(prefix)) {
+                        const varName = vars[i].name.substr(varStartIndex);
+                        const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
+                        if (vars[i].value !== currentVal) {
+                            console.log(`config value is different for ${varName}`);
+                            configHasChanged = true;
+                            await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
+                        }
                     }
                 }
             }
+
             tl.setVariable(updateConfigOutVarName, configHasChanged ? "some_change" : "no_change");
             console.log(`config has ${configHasChanged ? 'some' : 'no'} changes`);
             return;
