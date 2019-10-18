@@ -106,14 +106,15 @@ export async function runPulumiProgramAsync(
 
             console.log('locking init');
             const initLockBlobName: string = "init-stack.lock";
+
             await createBlobAsync(
                 storageAccountName,
                 storageAccountAccessKey,
                 containerName,
                 initLockBlobName,
                 localLockFullPath,
-                CreateBlobOverwriteOption.DoNothingIfBlobExists
-            );
+                CreateBlobOverwriteOption.DoNothingIfBlobExists);
+
             const initLockLeaseId = await lockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, initLockBlobName);
             try {
                 console.log('init stack');

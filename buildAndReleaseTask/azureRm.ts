@@ -94,7 +94,7 @@ export async function getSecretFromKeyVaultAsync(vaultName: string, secretName: 
         "--name", secretName,
         "--query", "value", "-o", "tsv"],
         getExecOptions(undefined, undefined, outStream));
-    if (exitCode == 3 && !required) {
+    if (exitCode === 3 && !required) {
         return "";
     }
     else if (exitCode !== 0) {
@@ -136,7 +136,7 @@ export async function checkIfBlobExistsAsync(
 export enum CreateBlobOverwriteOption {
     ErrorIfBlobExists,
     DoNothingIfBlobExists,
-    OverwriteIfBlobExists
+    OverwriteIfBlobExists,
 }
 
 /**
@@ -172,7 +172,7 @@ export async function createBlobAsync(
     const exitCode = await tl.exec(azPath, args,
         getExecOptions(undefined, undefined, outStream));
     if (exitCode !== 0) {
-        if (overwrite == CreateBlobOverwriteOption.DoNothingIfBlobExists
+        if (overwrite === CreateBlobOverwriteOption.DoNothingIfBlobExists
             &&
             (
                 outStream.getLines().join('\n').indexOf('BlobAlreadyExists')
