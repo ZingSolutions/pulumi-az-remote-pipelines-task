@@ -47,7 +47,7 @@
             "label": "State Storage Container Name",
             "defaultValue": "",
             "required": true,
-            "helpMarkDown": "Name of the Blob Storage Container that stores the Pulumi State file for Pulumi Stack."
+            "helpMarkDown": "Name of the Blob Storage Container that stores the Pulumi State file for the selected Pulumi Stack."
         },
         {
             "name": "keyVaultName",
@@ -56,6 +56,14 @@
             "defaultValue": "",
             "required": true,
             "helpMarkDown": "The name of the Key Vault that holds the passphrase used to encrypt secrets for the selected Pulumi Stack."
+        },
+        {
+            "name": "passphraseKeyVaultSecretName",
+            "type": "string",
+            "label": "Key Vault Stack Secret Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "The name of the secret in Key Vault that holds the passphrase to use to encrypt secrets for the selected Pulumi Stack. Will also be used as the name of the lock file for stack operations."
         },
         {
             "name": "stack",

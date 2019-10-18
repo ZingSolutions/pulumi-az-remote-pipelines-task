@@ -3,7 +3,8 @@ export class InputNames {
     public static AZURE_SUBSCRIPTION_REMOTE_STORE_AND_VAULT: string = "azureSubscriptionRemoteStoreAndVault";
     public static STORE_ACCOUNT_NAME: string = "storageAccountName";
     public static STORE_CONTAINER_NAME: string = "containerName";
-    public static SECRET_KEY_VAULT_NAME: string = "keyVaultName";
+    public static PASSPHRASE_KEY_VAULT_NAME: string = "keyVaultName";
+    public static PASSPHRASE_KEY_VAULT_SECRET_NAME: string = "passphraseKeyVaultSecretName";
     public static PULUMI_STACK: string = "stack";
     public static AZURE_SUBSCRIPTION_DEPLOYMENT: string = "azureSubscriptionDeployment";
     public static PULUMI_PROGRAM_DIRECTORY: string = "cwd";

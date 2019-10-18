@@ -1,7 +1,7 @@
 import {
     loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync,
-    setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync,
-    createBlobAsync, lockBlobAsync, unlockBlobAsync,
+    generateSecretInKeyVaultIfNotExistsAsync, getSecretFromKeyVaultAsync,
+    createBlobAsync, lockBlobAsync, unlockBlobAsync, CreateBlobOverwriteOption,
 } from "./azureRm";
 import { IServiceEndpoint } from "./models/IServiceEndpoint";
 import { InputNames } from "./models/InputNames";
@@ -9,7 +9,6 @@ import { getExecOptions } from "./utils/toolRunner";
 import * as toolLib from "azure-pipelines-tool-lib/tool";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as path from "path";
-import * as Crypto from "crypto";
 import { StringStream } from "./models/StringStream";
 import { IExecOptions } from "azure-pipelines-task-lib/toolrunner";
 
@@ -62,7 +61,8 @@ export async function runPulumiProgramAsync(
     tl.debug('referencing required inputs');
     const storageAccountName: string = tl.getInput(InputNames.STORE_ACCOUNT_NAME, true);
     const containerName: string = tl.getInput(InputNames.STORE_CONTAINER_NAME, true);
-    const keyVaultName: string = tl.getInput(InputNames.SECRET_KEY_VAULT_NAME, true);
+    const keyVaultName: string = tl.getInput(InputNames.PASSPHRASE_KEY_VAULT_NAME, true);
+    const keyVaultSecretName: string = tl.getInput(InputNames.PASSPHRASE_KEY_VAULT_SECRET_NAME, true);
     const workingDirectory = tl.getPathInput(InputNames.PULUMI_PROGRAM_DIRECTORY, false) || undefined;
     const cmd: string = tl.getInput(InputNames.PULUMI_COMMAND, true);
     const cmdArgs: string = tl.getInput(InputNames.PULUMI_COMMAND_ARGS, false) || '';
@@ -95,23 +95,43 @@ export async function runPulumiProgramAsync(
     switch (cmd) {
         case 'stack init':
             //custom command, handle in own way and exit once done
+            console.log('creating new stack.');
             const tempDirectory: string | undefined = process.env['AGENT_TEMPDIRECTORY'];
             if (!tempDirectory || !tempDirectory.trim()) {
                 throw new Error('AGENT_TEMPDIRECTORY environment variable is not set');
             }
-            const localLockFullPath: string = path.join(tempDirectory, 'stack.lock');
+            const localLockFullPath: string = path.join(tempDirectory, 'local.lock');
             console.log('creating local lock file');
             tl.writeFile(localLockFullPath, 'lockfile');
-            console.log('creating new stack.');
-            await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
-            console.log('stack created OK. creating lock file in blob storage.');
+
+            console.log('locking init');
+            const initLockBlobName: string = "init-stack.lock";
             await createBlobAsync(
                 storageAccountName,
                 storageAccountAccessKey,
                 containerName,
-                getLockBlobName(stackName),
-                localLockFullPath);
-            console.log('stack lock file created OK.');
+                initLockBlobName,
+                localLockFullPath,
+                CreateBlobOverwriteOption.DoNothingIfBlobExists
+            );
+            const initLockLeaseId = await lockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, initLockBlobName);
+            try {
+                console.log('init stack');
+                await initNewStackAsync(keyVaultName, keyVaultSecretName, stackName, envArgs, workingDirectory);
+
+                console.log('stack created OK. creating lock file in blob storage if not already exists.');
+                await createBlobAsync(
+                    storageAccountName,
+                    storageAccountAccessKey,
+                    containerName,
+                    getLockBlobName(keyVaultSecretName),
+                    localLockFullPath,
+                    CreateBlobOverwriteOption.DoNothingIfBlobExists);
+            }
+            finally {
+                console.log('unlocking init.');
+                await unlockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, initLockBlobName, initLockLeaseId);
+            }
             tl.setResult(tl.TaskResult.Succeeded, "new stack created OK");
             return;
         case 'stack exists':
@@ -145,15 +165,15 @@ export async function runPulumiProgramAsync(
     // preform a lock now, and unlock once done.
 
     //lock
-    const lockBlobName: string = getLockBlobName(stackName);
+    const lockBlobName: string = getLockBlobName(keyVaultSecretName);
     const lockLeaseId: string = await lockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, lockBlobName);
 
     //do work
     try {
         tl.debug('getting passphrase for stack from keyvault');
-        const passphrase: string = await getSecretFromKeyVaultAsync(keyVaultName, stackName);
+        const passphrase: string = await getSecretFromKeyVaultAsync(keyVaultName, keyVaultSecretName, true);
         if (!passphrase) {
-            throw new Error(`failed to read passphrase for stack ${stackName} from keyvault ${keyVaultName}`);
+            throw new Error(`failed to read passphrase for stack ${stackName} from secret ${keyVaultSecretName} in keyvault ${keyVaultName}`);
         }
         envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
 
@@ -227,8 +247,8 @@ export async function runPulumiProgramAsync(
     }
 }
 
-function getLockBlobName(stackName: string) {
-    return `state-locks/${stackName}.lock`;
+function getLockBlobName(keyVaultSecretName: string) {
+    return `state-locks/${keyVaultSecretName}.lock`;
 }
 
 async function installPulumiWindowsAsync(version: string): Promise<void> {
@@ -247,15 +267,13 @@ async function installPulumiLinuxAsync(version: string, os: string): Promise<voi
 
 async function initNewStackAsync(
     keyVaultName: string,
+    keyVaultSecretName: string,
     stackName: string,
     envArgs: { [key: string]: string },
     workingDirectory?: string): Promise<void> {
-    tl.debug('create new crypto random passphrase');
-    const buf = Crypto.randomBytes(64);
-    const passphrase: string = buf.toString('base64');
 
-    tl.debug('create secret to hold passphrase in key vault');
-    await setSecretInKeyVaultAsync(keyVaultName, stackName, passphrase, `passphrase for pulumi stack: ${stackName}`);
+    tl.debug('get passphrase for this section');
+    const passphrase: string = await generateSecretInKeyVaultIfNotExistsAsync(keyVaultName, keyVaultSecretName);
 
     tl.debug('init new pulumi stack');
     envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;

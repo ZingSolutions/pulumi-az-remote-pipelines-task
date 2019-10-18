@@ -3,11 +3,14 @@
 ## Overview
 Azure Pipelines Task for installing Pulumi and running a Pulumi program under an Azure environment where state is stored in blob storage and secrets are encrypted via a key vault key.
 
+Note: stack operations use a lock file to make sure only one instance of this program can perform a stack operation on any stack with the same Key Vault Stack Secret Name at a time.
+This allows for safe inner stack dependancies between stacks that share the same passphrase without worrying about update conflicts.
+
 ## Supported Pulumi Commands
 
 The plugin supports the following Pulumi commands.
 
-- **stack init** - initilises a new stack, with a new secret stored in keyvault to encrypt secrets. On success will create new stack.Pulumi file in working directory. Note: will error if stack already exists in azure storage backend store *(use stack exists command to check for existing stack first)*.
+- **stack init** - initilises a new stack, using a passphrase stored as a secret (name taken from the Key Vault Stack Secret Name setting) in keyvault (vault name taken from the Key Vault Name setting) to encrypt secrets. If a secret with the given name does not already exist, a new passphrase will be automaticaly generated and stored in a new keyVault secret. On success will create new stack.Pulumi file in the working directory. Note: will error if stack already exists in azure storage backend store *(use stack exists command to check for existing stack first)*.
 
 - **stack exists** - checks if the given stack exists in the remote blob storage account. Will write the result (either `"true"` or `"false"`) to the job level environment vairiable named in the Output Variable setting, defaults to `STACK_EXISTS_RESULT`.
 
