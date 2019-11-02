@@ -188,13 +188,17 @@ export async function runPulumiProgramAsync(
         if (isUpdateConfigCmd) {
             let configHasChanged: boolean = false;
             const vars = tl.getVariables();
+            const includePrefix = tl.getBoolInput(InputNames.UPDATE_CONFIG_INCLUDE_PREFIX, true);
             //process variables for each requested prefix
             for (const prefix of updateConfigSettingPrefixs) {
                 const varStartIndex = prefix.length;
                 console.log(`getting variables prefixed with ${prefix}`);
                 for (let i = 0, l = vars.length; i < l; i++) {
                     if (vars[i].name.toUpperCase().startsWith(prefix)) {
-                        const varName = vars[i].name.substr(varStartIndex);
+                        let varName = vars[i].name;
+                        if (!includePrefix) {
+                            varName = varName.substr(varStartIndex);
+                        }
                         const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
                         if (vars[i].value !== currentVal) {
                             console.log(`config value is different for ${varName}`);
