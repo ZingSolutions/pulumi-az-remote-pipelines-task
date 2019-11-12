@@ -16,6 +16,10 @@ The plugin supports the following Pulumi commands.
 
 - **update config** - loops over all environment variables for the current job. For any environment variable that is prefixed with one of the prefixes defined in the Config Prefix setting, (comma seperated, case insensitive, defaults to `PULUMI_`), will write the name (excluding or including the prefix, dependant on Include Prefix setting) and value as a config option for the given stack. Note: if the variable is marked as secret this will be written as secret in the config as well. Once complete will set the status of this action to the job level environment variable named in the Output Variable setting, defaults to `STACK_CONFIG_UPDATE_RESULT`. Possible values are `"some_change"` or `"no_change"`.
 
+- **output config** - loops over all config settings for the current stack. For any config vaule that is prefixed with one of the prefixes defined in the Config Prefix setting, 
+(comma seperated, case insensitive), will write the name (excluding or including the prefix, dependant on Include Prefix setting) and value as a environment variable for the current job.
+Note: if the config value is marked as secret the environment variable will also be created as a secret.
+
 - **preview** - runs the pulumi [preview](https://www.pulumi.com/docs/reference/cli/pulumi_preview/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the preview command will also be written to disk at the given filePath.
 
 - **up** - runs the pulumi [up](https://www.pulumi.com/docs/reference/cli/pulumi_up/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the up command will also be written to disk at the given filePath.

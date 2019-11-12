@@ -90,6 +90,7 @@ export async function runPulumiProgramAsync(
     tl.debug(`command selected ${cmd}`);
     let saveOutputToFilePath: string | undefined;
     let isUpdateConfigCmd: boolean = false;
+    let isOutputConfigCmd: boolean = false;
     let updateConfigSettingPrefixs: string[] = [];
     let updateConfigOutVarName: string = '';
     switch (cmd) {
@@ -151,6 +152,12 @@ export async function runPulumiProgramAsync(
                     .split(',').filter((e) => e && e.trim()).map((e) => e.trim().toUpperCase());
             updateConfigOutVarName = tl.getInput(InputNames.UPDATE_CONFIG_OUTPUT_VAR_NAME, true);
             break;
+        case 'output config':
+            isOutputConfigCmd = true;
+            updateConfigSettingPrefixs =
+                tl.getInput(InputNames.UPDATE_CONFIG_SETTINGS_PREFIX, true)
+                    .split(',').filter((e) => e && e.trim()).map((e) => e.trim().toUpperCase());
+            break;
         case 'preview':
         case 'up':
         case 'destroy':
@@ -211,6 +218,27 @@ export async function runPulumiProgramAsync(
 
             tl.setVariable(updateConfigOutVarName, configHasChanged ? "some_change" : "no_change");
             console.log(`config has ${configHasChanged ? 'some' : 'no'} changes`);
+            return;
+        }
+
+        if (isOutputConfigCmd) {
+            const includePrefix = tl.getBoolInput(InputNames.UPDATE_CONFIG_INCLUDE_PREFIX, true);
+            const configJson = await getConfigValuesAsJsonAsync(pulumiPath, envArgs, workingDirectory);
+            const configObj = JSON.parse(configJson);
+            const keys = Object.keys(configObj);
+            for (const prefix of updateConfigSettingPrefixs) {
+                const varStartIndex = prefix.length;
+                for (let i = 0, l = keys.length; i < l; i++) {
+                    if (keys[i].toUpperCase().startsWith(prefix)) {
+                        let varName = keys[i];
+                        if (!includePrefix) {
+                            varName = varName.substr(varStartIndex);
+                        }
+                        const item: { value: string, secret: boolean } = configObj[keys[i]];
+                        tl.setVariable(varName, item.value, item.secret);
+                    }
+                }
+            }
             return;
         }
 
@@ -289,6 +317,18 @@ async function initNewStackAsync(
     if (exitCode !== 0) {
         throw new Error(`Pulumi Command: stack init ${stackName} --secrets-provider passphrase failed, exit code was: ${exitCode}`);
     }
+}
+
+async function getConfigValuesAsJsonAsync(
+    pulumiPath: string,
+    envArgs: { [key: string]: string },
+    workingDirectory?: string): Promise<string> {
+    const outStream: StringStream = new StringStream();
+    const exitCode = await tl.exec(pulumiPath, ['config', '--json', '--show-secrets'], getExecOptions(envArgs, workingDirectory, outStream));
+    if (exitCode !== 0) {
+        throw new Error(`failed to get config values as json, exit code was: ${exitCode}`);
+    }
+    return outStream.getLastLine();
 }
 
 async function getConfigValueAsync(
