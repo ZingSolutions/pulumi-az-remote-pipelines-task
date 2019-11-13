@@ -13,9 +13,9 @@ import Axios from 'axios';
 
         //validate stack name
         const stackName = tl.getInput(InputNames.PULUMI_STACK, true);
-        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9-]+$/)).test(stackName)) {
-            throw new Error(`Invalid satack name, ${stackName}.
-            Name must only contain alphanumeric characters or dashes and must start with a letter.`);
+        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9.-]+$/)).test(stackName)) {
+            throw new Error(`Invalid stack name, ${stackName}.
+            Name must only contain alphanumeric characters, hyphens or periods and must start with a letter.`);
         }
 
         //validate rm services
