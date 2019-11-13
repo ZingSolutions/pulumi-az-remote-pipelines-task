@@ -11,11 +11,18 @@ import Axios from 'axios';
         tl.debug('task starting ...');
         tl.setResourcePath(path.join(__dirname, "task.json"));
 
-        //validate stack name
+        //validate keyvault name (keyvault restriction)
+        const keyVaultSecretName = tl.getInput(InputNames.PASSPHRASE_KEY_VAULT_SECRET_NAME, true);
+        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9-]+$/)).test(keyVaultSecretName)) {
+            throw new Error(`Invalid Key Vault Secret Name, ${keyVaultSecretName}.
+            Key Vault Secret Name must only contain alphanumeric characters or hyphens (dashes) and must start with a letter.`);
+        }
+
+        //validate stack name (filename restriction)
         const stackName = tl.getInput(InputNames.PULUMI_STACK, true);
-        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9.-]+$/)).test(stackName)) {
-            throw new Error(`Invalid stack name, ${stackName}.
-            Name must only contain alphanumeric characters, hyphens or periods and must start with a letter.`);
+        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9-._]+$/)).test(stackName)) {
+            throw new Error(`Invalid Stack Name, ${stackName}.
+            Stack Name must only contain alphanumeric characters, underscores, periods or hyphens (dashes) and must start with a letter.`);
         }
 
         //validate rm services
