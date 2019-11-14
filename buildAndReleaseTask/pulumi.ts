@@ -71,7 +71,7 @@ export async function runPulumiProgramAsync(
     tl.debug('gathering required environment variables to build pulumi exec options');
     const envArgs: { [key: string]: string } = {};
     //skip version check
-    envArgs["PULUMI_SKIP_UPDATE"] = "true";
+    envArgs["PULUMI_SKIP_UPDATE_CHECK"] = "true";
     //for AZ CLI access via pulumi
     envArgs["ARM_CLIENT_ID"] = deploymentServiceEndpoint.clientId;
     envArgs["ARM_CLIENT_SECRET"] = deploymentServiceEndpoint.servicePrincipalKey;
@@ -227,16 +227,16 @@ export async function runPulumiProgramAsync(
             const includePrefix = tl.getBoolInput(InputNames.UPDATE_CONFIG_INCLUDE_PREFIX, true);
             const configJson = await getConfigValuesAsJsonAsync(pulumiPath, envArgs, workingDirectory);
             const configObj = JSON.parse(configJson);
-            const keys = Object.keys(configObj);
+            const keys = Object.keys(configObj).map((key) => ({ key, outKey: key.split(":")[1].toUpperCase() }));
             for (const prefix of updateConfigSettingPrefixs) {
                 const varStartIndex = prefix.length;
                 for (let i = 0, l = keys.length; i < l; i++) {
-                    if (keys[i].toUpperCase().startsWith(prefix)) {
-                        let varName = keys[i];
+                    if (keys[i].outKey.startsWith(prefix)) {
+                        let varName = keys[i].outKey;
                         if (!includePrefix) {
                             varName = varName.substr(varStartIndex);
                         }
-                        const item: { value: string, secret: boolean } = configObj[keys[i]];
+                        const item: { value: string, secret: boolean } = configObj[keys[i].key];
                         tl.setVariable(varName, item.value, item.secret);
                     }
                 }
