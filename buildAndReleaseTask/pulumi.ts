@@ -70,6 +70,8 @@ export async function runPulumiProgramAsync(
 
     tl.debug('gathering required environment variables to build pulumi exec options');
     const envArgs: { [key: string]: string } = {};
+    //skip version check
+    envArgs["PULUMI_SKIP_UPDATE"] = "true";
     //for AZ CLI access via pulumi
     envArgs["ARM_CLIENT_ID"] = deploymentServiceEndpoint.clientId;
     envArgs["ARM_CLIENT_SECRET"] = deploymentServiceEndpoint.servicePrincipalKey;
@@ -305,10 +307,10 @@ async function initNewStackAsync(
     envArgs: { [key: string]: string },
     workingDirectory?: string): Promise<void> {
 
-    tl.debug('get passphrase for this section');
+    console.log('get passphrase for initNewStackAsync');
     const passphrase: string = await generateSecretInKeyVaultIfNotExistsAsync(keyVaultName, keyVaultSecretName);
-
-    tl.debug('init new pulumi stack');
+    console.log(`passpharse length was: ${passphrase.length}`);
+    console.log('init new pulumi stack');
     envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
     const pulumiPath: string = getPulumiPath();
     const exitCode: number = await tl.exec(pulumiPath,
@@ -339,7 +341,6 @@ async function getConfigValueAsync(
     const outStream: StringStream = new StringStream();
     const exitCode = await tl.exec(pulumiPath, ['config', 'get', key], getExecOptions(envArgs, workingDirectory, outStream));
     if (exitCode !== 0) {
-        console.warn(`failed to get config value ${key}, exit code was: ${exitCode}`);
         return '';
     }
     return outStream.getLastLine();

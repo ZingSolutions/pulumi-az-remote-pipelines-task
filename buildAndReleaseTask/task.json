@@ -13,7 +13,7 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 73
+        "Patch": 77
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [

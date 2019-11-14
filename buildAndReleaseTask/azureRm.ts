@@ -53,17 +53,17 @@ export async function generateSecretInKeyVaultIfNotExistsAsync(vaultName: string
     const azPath: string = getAzPath();
     const outStream: StringStream = new StringStream();
 
-    tl.debug('check for existing keyvault secret');
-    const existingValue = getSecretFromKeyVaultAsync(vaultName, secretName, false);
+    console.log('check for existing keyvault secret');
+    const existingValue = await getSecretFromKeyVaultAsync(vaultName, secretName, false);
     if (existingValue) {
         return existingValue;
     }
 
-    tl.debug('create new crypto random value');
+    console.log('create new crypto random value');
     const buf = Crypto.randomBytes(64);
     const keyValue: string = buf.toString('base64');
 
-    tl.debug('creating keyvault secret');
+    console.log('creating keyvault secret');
     const exitCode = await tl.exec(azPath, ["keyvault", "secret", "set",
         "--vault-name", vaultName,
         "--name", secretName,
@@ -76,6 +76,7 @@ export async function generateSecretInKeyVaultIfNotExistsAsync(vaultName: string
     if (outStream.getLastLine() !== keyValue) {
         throw new Error("failed to parse expected set secret value from az command output stream, value was different to keyValue requested to be saved");
     }
+    console.log('after create keyvault secret');
     return keyValue;
 }
 
