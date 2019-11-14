@@ -1,7 +1,7 @@
 import {
     loginToAzAsync, getStorageAccountAccessTokenAsync, checkIfBlobExistsAsync,
-    setSecretInKeyVaultAsync, getSecretFromKeyVaultAsync,
-    createBlobAsync, lockBlobAsync, unlockBlobAsync,
+    generateSecretInKeyVaultIfNotExistsAsync, getSecretFromKeyVaultAsync,
+    createBlobAsync, lockBlobAsync, unlockBlobAsync, CreateBlobOverwriteOption,
 } from "./azureRm";
 import { IServiceEndpoint } from "./models/IServiceEndpoint";
 import { InputNames } from "./models/InputNames";
@@ -9,7 +9,6 @@ import { getExecOptions } from "./utils/toolRunner";
 import * as toolLib from "azure-pipelines-tool-lib/tool";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as path from "path";
-import * as Crypto from "crypto";
 import { StringStream } from "./models/StringStream";
 import { IExecOptions } from "azure-pipelines-task-lib/toolrunner";
 
@@ -47,9 +46,13 @@ export async function checkPulumiInstallAsync(requiredVersion: string): Promise<
     tl.setVariable(variableName, requiredVersion);
 }
 
-export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: IServiceEndpoint): Promise<void> {
+export async function runPulumiProgramAsync(
+    stackName: string,
+    remoteStoreAndVaultServiceEndpoint: IServiceEndpoint,
+    deploymentServiceEndpoint: IServiceEndpoint): Promise<void> {
+
     //login to az (required to get storage access key & key vault access)
-    await loginToAzAsync(serviceEndpoint);
+    await loginToAzAsync(remoteStoreAndVaultServiceEndpoint);
 
     tl.debug('referencing pulumi and logging out version in use to console');
     const pulumiPath = getPulumiPath();
@@ -58,7 +61,8 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     tl.debug('referencing required inputs');
     const storageAccountName: string = tl.getInput(InputNames.STORE_ACCOUNT_NAME, true);
     const containerName: string = tl.getInput(InputNames.STORE_CONTAINER_NAME, true);
-    const keyVaultName: string = tl.getInput(InputNames.SECRET_KEY_VAULT_NAME, true);
+    const keyVaultName: string = tl.getInput(InputNames.PASSPHRASE_KEY_VAULT_NAME, true);
+    const keyVaultSecretName: string = tl.getInput(InputNames.PASSPHRASE_KEY_VAULT_SECRET_NAME, true);
     const workingDirectory = tl.getPathInput(InputNames.PULUMI_PROGRAM_DIRECTORY, false) || undefined;
     const cmd: string = tl.getInput(InputNames.PULUMI_COMMAND, true);
     const cmdArgs: string = tl.getInput(InputNames.PULUMI_COMMAND_ARGS, false) || '';
@@ -66,11 +70,13 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
 
     tl.debug('gathering required environment variables to build pulumi exec options');
     const envArgs: { [key: string]: string } = {};
+    //skip version check
+    envArgs["PULUMI_SKIP_UPDATE_CHECK"] = "true";
     //for AZ CLI access via pulumi
-    envArgs["ARM_CLIENT_ID"] = serviceEndpoint.clientId;
-    envArgs["ARM_CLIENT_SECRET"] = serviceEndpoint.servicePrincipalKey;
-    envArgs["ARM_TENANT_ID"] = serviceEndpoint.tenantId;
-    envArgs["ARM_SUBSCRIPTION_ID"] = serviceEndpoint.subscriptionId;
+    envArgs["ARM_CLIENT_ID"] = deploymentServiceEndpoint.clientId;
+    envArgs["ARM_CLIENT_SECRET"] = deploymentServiceEndpoint.servicePrincipalKey;
+    envArgs["ARM_TENANT_ID"] = deploymentServiceEndpoint.tenantId;
+    envArgs["ARM_SUBSCRIPTION_ID"] = deploymentServiceEndpoint.subscriptionId;
     //for remote store access
     envArgs["AZURE_STORAGE_ACCOUNT"] = storageAccountName;
     envArgs["AZURE_STORAGE_KEY"] = storageAccountAccessKey;
@@ -86,28 +92,50 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     tl.debug(`command selected ${cmd}`);
     let saveOutputToFilePath: string | undefined;
     let isUpdateConfigCmd: boolean = false;
-    let updateConfigSettingPrefix: string = '';
+    let isOutputConfigCmd: boolean = false;
+    let updateConfigSettingPrefixs: string[] = [];
     let updateConfigOutVarName: string = '';
     switch (cmd) {
         case 'stack init':
             //custom command, handle in own way and exit once done
+            console.log('creating new stack.');
             const tempDirectory: string | undefined = process.env['AGENT_TEMPDIRECTORY'];
             if (!tempDirectory || !tempDirectory.trim()) {
                 throw new Error('AGENT_TEMPDIRECTORY environment variable is not set');
             }
-            const localLockFullPath: string = path.join(tempDirectory, 'stack.lock');
+            const localLockFullPath: string = path.join(tempDirectory, 'local.lock');
             console.log('creating local lock file');
             tl.writeFile(localLockFullPath, 'lockfile');
-            console.log('creating new stack.');
-            await initNewStackAsync(keyVaultName, stackName, envArgs, workingDirectory);
-            console.log('stack created OK. creating lock file in blob storage.');
+
+            console.log('locking init');
+            const initLockBlobName: string = "init-stack.lock";
+
             await createBlobAsync(
                 storageAccountName,
                 storageAccountAccessKey,
                 containerName,
-                getLockBlobName(stackName),
-                localLockFullPath);
-            console.log('stack lock file created OK.');
+                initLockBlobName,
+                localLockFullPath,
+                CreateBlobOverwriteOption.DoNothingIfBlobExists);
+
+            const initLockLeaseId = await lockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, initLockBlobName);
+            try {
+                console.log('init stack');
+                await initNewStackAsync(keyVaultName, keyVaultSecretName, stackName, envArgs, workingDirectory);
+
+                console.log('stack created OK. creating lock file in blob storage if not already exists.');
+                await createBlobAsync(
+                    storageAccountName,
+                    storageAccountAccessKey,
+                    containerName,
+                    getLockBlobName(keyVaultSecretName),
+                    localLockFullPath,
+                    CreateBlobOverwriteOption.DoNothingIfBlobExists);
+            }
+            finally {
+                console.log('unlocking init.');
+                await unlockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, initLockBlobName, initLockLeaseId);
+            }
             tl.setResult(tl.TaskResult.Succeeded, "new stack created OK");
             return;
         case 'stack exists':
@@ -121,8 +149,16 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
             return;
         case 'update config':
             isUpdateConfigCmd = true;
-            updateConfigSettingPrefix = tl.getInput(InputNames.UPDATE_CONFIG_SETTINGS_PREFIX, true);
+            updateConfigSettingPrefixs =
+                tl.getInput(InputNames.UPDATE_CONFIG_SETTINGS_PREFIX, true)
+                    .split(',').filter((e) => e && e.trim()).map((e) => e.trim().toUpperCase());
             updateConfigOutVarName = tl.getInput(InputNames.UPDATE_CONFIG_OUTPUT_VAR_NAME, true);
+            break;
+        case 'output config':
+            isOutputConfigCmd = true;
+            updateConfigSettingPrefixs =
+                tl.getInput(InputNames.UPDATE_CONFIG_SETTINGS_PREFIX, true)
+                    .split(',').filter((e) => e && e.trim()).map((e) => e.trim().toUpperCase());
             break;
         case 'preview':
         case 'up':
@@ -139,15 +175,15 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     // preform a lock now, and unlock once done.
 
     //lock
-    const lockBlobName: string = getLockBlobName(stackName);
+    const lockBlobName: string = getLockBlobName(keyVaultSecretName);
     const lockLeaseId: string = await lockBlobAsync(storageAccountName, storageAccountAccessKey, containerName, lockBlobName);
 
     //do work
     try {
         tl.debug('getting passphrase for stack from keyvault');
-        const passphrase: string = await getSecretFromKeyVaultAsync(keyVaultName, stackName);
+        const passphrase: string = await getSecretFromKeyVaultAsync(keyVaultName, keyVaultSecretName, true);
         if (!passphrase) {
-            throw new Error(`failed to read passphrase for stack ${stackName} from keyvault ${keyVaultName}`);
+            throw new Error(`failed to read passphrase for stack ${stackName} from secret ${keyVaultSecretName} in keyvault ${keyVaultName}`);
         }
         envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
 
@@ -159,24 +195,52 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
         }
 
         if (isUpdateConfigCmd) {
-            updateConfigSettingPrefix = updateConfigSettingPrefix.toUpperCase();
-            const varStartIndex = updateConfigSettingPrefix.length;
             let configHasChanged: boolean = false;
-            console.log(`getting variables prefixed with ${updateConfigSettingPrefix}`);
             const vars = tl.getVariables();
-            for (let i = 0, l = vars.length; i < l; i++) {
-                if (vars[i].name.toUpperCase().startsWith(updateConfigSettingPrefix)) {
-                    const varName = vars[i].name.substr(varStartIndex);
-                    const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
-                    if (vars[i].value !== currentVal) {
-                        console.log(`config value is different for ${varName}`);
-                        configHasChanged = true;
-                        await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
+            const includePrefix = tl.getBoolInput(InputNames.UPDATE_CONFIG_INCLUDE_PREFIX, true);
+            //process variables for each requested prefix
+            for (const prefix of updateConfigSettingPrefixs) {
+                const varStartIndex = prefix.length;
+                console.log(`getting variables prefixed with ${prefix}`);
+                for (let i = 0, l = vars.length; i < l; i++) {
+                    if (vars[i].name.toUpperCase().startsWith(prefix)) {
+                        let varName = vars[i].name;
+                        if (!includePrefix) {
+                            varName = varName.substr(varStartIndex);
+                        }
+                        const currentVal = await getConfigValueAsync(varName, pulumiPath, envArgs, workingDirectory);
+                        if (vars[i].value !== currentVal) {
+                            console.log(`config value is different for ${varName}`);
+                            configHasChanged = true;
+                            await setConfigValueAsync(pulumiPath, cmdExeOptions, varName, vars[i].value, vars[i].secret);
+                        }
                     }
                 }
             }
+
             tl.setVariable(updateConfigOutVarName, configHasChanged ? "some_change" : "no_change");
             console.log(`config has ${configHasChanged ? 'some' : 'no'} changes`);
+            return;
+        }
+
+        if (isOutputConfigCmd) {
+            const includePrefix = tl.getBoolInput(InputNames.UPDATE_CONFIG_INCLUDE_PREFIX, true);
+            const configJson = await getConfigValuesAsJsonAsync(pulumiPath, envArgs, workingDirectory);
+            const configObj = JSON.parse(configJson);
+            const keys = Object.keys(configObj).map((key) => ({ key, outKey: key.split(":")[1].toUpperCase() }));
+            for (const prefix of updateConfigSettingPrefixs) {
+                const varStartIndex = prefix.length;
+                for (let i = 0, l = keys.length; i < l; i++) {
+                    if (keys[i].outKey.startsWith(prefix)) {
+                        let varName = keys[i].outKey;
+                        if (!includePrefix) {
+                            varName = varName.substr(varStartIndex);
+                        }
+                        const item: { value: string, secret: boolean } = configObj[keys[i].key];
+                        tl.setVariable(varName, item.value, item.secret);
+                    }
+                }
+            }
             return;
         }
 
@@ -218,8 +282,8 @@ export async function runPulumiProgramAsync(stackName: string, serviceEndpoint: 
     }
 }
 
-function getLockBlobName(stackName: string) {
-    return `state-locks/${stackName}.lock`;
+function getLockBlobName(keyVaultSecretName: string) {
+    return `state-locks/${keyVaultSecretName}.lock`;
 }
 
 async function installPulumiWindowsAsync(version: string): Promise<void> {
@@ -238,17 +302,15 @@ async function installPulumiLinuxAsync(version: string, os: string): Promise<voi
 
 async function initNewStackAsync(
     keyVaultName: string,
+    keyVaultSecretName: string,
     stackName: string,
     envArgs: { [key: string]: string },
     workingDirectory?: string): Promise<void> {
-    tl.debug('create new crypto random passphrase');
-    const buf = Crypto.randomBytes(64);
-    const passphrase: string = buf.toString('base64');
 
-    tl.debug('create secret to hold passphrase in key vault');
-    await setSecretInKeyVaultAsync(keyVaultName, stackName, passphrase, `passphrase for pulumi stack: ${stackName}`);
-
-    tl.debug('init new pulumi stack');
+    console.log('get passphrase for initNewStackAsync');
+    const passphrase: string = await generateSecretInKeyVaultIfNotExistsAsync(keyVaultName, keyVaultSecretName);
+    console.log(`passpharse length was: ${passphrase.length}`);
+    console.log('init new pulumi stack');
     envArgs["PULUMI_CONFIG_PASSPHRASE"] = passphrase;
     const pulumiPath: string = getPulumiPath();
     const exitCode: number = await tl.exec(pulumiPath,
@@ -259,6 +321,18 @@ async function initNewStackAsync(
     }
 }
 
+async function getConfigValuesAsJsonAsync(
+    pulumiPath: string,
+    envArgs: { [key: string]: string },
+    workingDirectory?: string): Promise<string> {
+    const outStream: StringStream = new StringStream();
+    const exitCode = await tl.exec(pulumiPath, ['config', '--json', '--show-secrets'], getExecOptions(envArgs, workingDirectory, outStream));
+    if (exitCode !== 0) {
+        throw new Error(`failed to get config values as json, exit code was: ${exitCode}`);
+    }
+    return outStream.getLastLine();
+}
+
 async function getConfigValueAsync(
     key: string,
     pulumiPath: string,
@@ -267,7 +341,6 @@ async function getConfigValueAsync(
     const outStream: StringStream = new StringStream();
     const exitCode = await tl.exec(pulumiPath, ['config', 'get', key], getExecOptions(envArgs, workingDirectory, outStream));
     if (exitCode !== 0) {
-        console.warn(`failed to get config value ${key}, exit code was: ${exitCode}`);
         return '';
     }
     return outStream.getLastLine();

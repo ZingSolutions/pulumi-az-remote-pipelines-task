@@ -2,6 +2,7 @@ import { IServiceEndpoint } from "./models/IServiceEndpoint";
 import { getExecOptions } from "./utils/toolRunner";
 import { StringStream } from "./models/StringStream";
 import * as tl from 'azure-pipelines-task-lib/task';
+import * as Crypto from "crypto";
 
 export async function loginToAzAsync(serviceEndpoint: IServiceEndpoint): Promise<void> {
     const azPath: string = getAzPath();
@@ -42,14 +43,31 @@ export async function getStorageAccountAccessTokenAsync(storageAccountName: stri
     return token;
 }
 
-export async function setSecretInKeyVaultAsync(vaultName: string, secretName: string, keyValue: string, keyDescription?: string): Promise<void> {
+/**
+ * generates new secret with crypto random value in keyvault if it does
+ * not already exist. returns the secret value.
+ * @param vaultName name of vault to add secret to
+ * @param secretName name of secret to add (if it doesnt already exist)
+ */
+export async function generateSecretInKeyVaultIfNotExistsAsync(vaultName: string, secretName: string): Promise<string> {
     const azPath: string = getAzPath();
     const outStream: StringStream = new StringStream();
+
+    console.log('check for existing keyvault secret');
+    const existingValue = await getSecretFromKeyVaultAsync(vaultName, secretName, false);
+    if (existingValue) {
+        return existingValue;
+    }
+
+    console.log('create new crypto random value');
+    const buf = Crypto.randomBytes(64);
+    const keyValue: string = buf.toString('base64');
+
+    console.log('creating keyvault secret');
     const exitCode = await tl.exec(azPath, ["keyvault", "secret", "set",
         "--vault-name", vaultName,
         "--name", secretName,
         "--value", keyValue,
-        "--description", `${keyDescription || ""}`,
         "--query", "value", "-o", "tsv"],
         getExecOptions(undefined, undefined, outStream));
     if (exitCode !== 0) {
@@ -58,9 +76,18 @@ export async function setSecretInKeyVaultAsync(vaultName: string, secretName: st
     if (outStream.getLastLine() !== keyValue) {
         throw new Error("failed to parse expected set secret value from az command output stream, value was different to keyValue requested to be saved");
     }
+    console.log('after create keyvault secret');
+    return keyValue;
 }
 
-export async function getSecretFromKeyVaultAsync(vaultName: string, secretName: string): Promise<string> {
+/**
+ * returns a secret value from keyvault
+ * @param vaultName name of the vault to read the secret from
+ * @param secretName name of the secret to get the value of
+ * @param required if set to true will error if the secret cannont be found,
+ *  however if set to false will return an empty string,
+ */
+export async function getSecretFromKeyVaultAsync(vaultName: string, secretName: string, required: boolean): Promise<string> {
     const azPath: string = getAzPath();
     const outStream: StringStream = new StringStream();
     const exitCode = await tl.exec(azPath, ["keyvault", "secret", "show",
@@ -68,7 +95,10 @@ export async function getSecretFromKeyVaultAsync(vaultName: string, secretName: 
         "--name", secretName,
         "--query", "value", "-o", "tsv"],
         getExecOptions(undefined, undefined, outStream));
-    if (exitCode !== 0) {
+    if (exitCode === 3 && !required) {
+        return "";
+    }
+    else if (exitCode !== 0) {
         throw new Error(`failed to get secret ${secretName} from keyvault ${vaultName}, exit code was: ${exitCode}`);
     }
     return outStream.getLastLine() || "";
@@ -104,6 +134,12 @@ export async function checkIfBlobExistsAsync(
     }
 }
 
+export enum CreateBlobOverwriteOption {
+    ErrorIfBlobExists,
+    DoNothingIfBlobExists,
+    OverwriteIfBlobExists,
+}
+
 /**
  * Wiil create a new blob with the given parameters.
  * Note: if a blob already exists in the same location a overwrite will be attempted.
@@ -113,17 +149,41 @@ export async function createBlobAsync(
     accountAccessKey: string,
     containerName: string,
     blobName: string,
-    localFilePath: string): Promise<void> {
+    localFilePath: string,
+    overwrite: CreateBlobOverwriteOption): Promise<void> {
     const azPath: string = getAzPath();
     const outStream: StringStream = new StringStream();
-    const exitCode = await tl.exec(azPath, ["storage", "blob", "upload",
+
+    const args = ["storage", "blob", "upload",
         "--account-name", accountName,
         "--account-key", accountAccessKey,
         "--container-name", containerName,
         "--file", localFilePath,
-        "--name", blobName, "-o", "tsv"],
+        "--name", blobName];
+    switch (overwrite) {
+        case CreateBlobOverwriteOption.DoNothingIfBlobExists:
+        case CreateBlobOverwriteOption.ErrorIfBlobExists:
+            args.push("--if-none-match");
+            args.push("*");
+            break;
+    }
+    args.push("-o");
+    args.push("tsv");
+
+    const exitCode = await tl.exec(azPath, args,
         getExecOptions(undefined, undefined, outStream));
     if (exitCode !== 0) {
+        if (overwrite === CreateBlobOverwriteOption.DoNothingIfBlobExists
+            &&
+            (
+                outStream.getLines().join('\n').indexOf('BlobAlreadyExists')
+                || outStream.getLines().join('\n').indexOf('LeaseIdMissing')
+            )
+        ) {
+            //ignore BlobAlreadyExists or LeaseIdMissing error as caller
+            //requested do nothing in this case.
+            return;
+        }
         throw new Error(`failed to use az to create blob ${blobName}
         in container ${containerName} under account ${accountName}, exit code was: ${exitCode}`);
     }

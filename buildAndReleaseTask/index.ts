@@ -11,19 +11,26 @@ import Axios from 'axios';
         tl.debug('task starting ...');
         tl.setResourcePath(path.join(__dirname, "task.json"));
 
-        //validate stack name
-        const stackName = tl.getInput(InputNames.PULUMI_STACK, true);
-        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9-]+$/)).test(stackName)) {
-            throw new Error(`Invalid satack name, ${stackName}.
-            Name must only contain alphanumeric characters or dashes and must start with a letter.`);
+        //validate keyvault name (keyvault restriction)
+        const keyVaultSecretName = tl.getInput(InputNames.PASSPHRASE_KEY_VAULT_SECRET_NAME, true);
+        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9-]+$/)).test(keyVaultSecretName)) {
+            throw new Error(`Invalid Key Vault Secret Name, ${keyVaultSecretName}.
+            Key Vault Secret Name must only contain alphanumeric characters or hyphens (dashes) and must start with a letter.`);
         }
 
-        //validate rm service
-        tl.debug('checking specified azure subscription has service endpoint configured ...');
-        const connectedServiceName = tl.getInput(InputNames.AZURE_SUBSCRIPTION, true);
-        tl.debug(`azureSubscription: ${connectedServiceName}`);
-        const serviceEndpoint = getServiceEndpoint(connectedServiceName);
-        tl.debug(`service endpoint retrieved with client ID ${serviceEndpoint.clientId}`);
+        //validate stack name (filename restriction)
+        const stackName = tl.getInput(InputNames.PULUMI_STACK, true);
+        if (!(new RegExp(/^[a-zA-Z][a-zA-Z0-9-._]+$/)).test(stackName)) {
+            throw new Error(`Invalid Stack Name, ${stackName}.
+            Stack Name must only contain alphanumeric characters, underscores, periods or hyphens (dashes) and must start with a letter.`);
+        }
+
+        //validate rm services
+        tl.debug('checking specified azure subscriptions have service endpoint configured ...');
+        const remoteStoreAndVaultServiceEndpoint = getServiceEndpoint(tl.getInput(InputNames.AZURE_SUBSCRIPTION_REMOTE_STORE_AND_VAULT, true));
+        tl.debug(`remote store and vault service endpoint retrieved with client ID ${remoteStoreAndVaultServiceEndpoint.clientId}`);
+        const deploymentServiceEndpoint = getServiceEndpoint(tl.getInput(InputNames.AZURE_SUBSCRIPTION_DEPLOYMENT, true));
+        tl.debug(`remote store and vault service endpoint retrieved with client ID ${deploymentServiceEndpoint.clientId}`);
 
         //validate pulumi verison
         tl.debug('verifying pulumi install');
@@ -49,7 +56,7 @@ import Axios from 'axios';
         await checkPulumiInstallAsync(pulumiVersion);
 
         tl.debug('pulumi installed, about to run pulumi program');
-        await runPulumiProgramAsync(stackName, serviceEndpoint);
+        await runPulumiProgramAsync(stackName, remoteStoreAndVaultServiceEndpoint, deploymentServiceEndpoint);
 
         tl.setResult(tl.TaskResult.Succeeded, "pulumi progam complete");
     } catch (err) {

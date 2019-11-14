@@ -13,7 +13,7 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 66
+        "Patch": 81
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
@@ -26,20 +26,12 @@
             "helpMarkDown": "The Pulumi version that should be used. If you require a specific version then the format is '1.1.0' or if you just need the latest version then 'latest' can be used."
         },
         {
-            "name": "stack",
-            "type": "string",
-            "label": "Stack Name",
-            "defaultValue": "",
-            "required": true,
-            "helpMarkDown": "The Pulumi Stack against which to run the commands. Can only contain alphanumeric characters or dashes and must start with a letter."
-        },
-        {
-            "name": "azureSubscription",
+            "name": "azureSubscriptionRemoteStoreAndVault",
             "type": "connectedService:AzureRM",
-            "label": "Azure Subscription",
+            "label": "Azure Subscription (Remote Storage & Key Vault)",
             "defaultValue": "",
             "required": true,
-            "helpMarkDown": "Select the Azure Resource Manager subscription for the deployment. Note: blob storage used for state and keyvault must be accessiable via this connection."
+            "helpMarkDown": "Select the Azure Resource Manager subscription that has access to the blob storage account used for remote state storage and the key vault account used to hold encryption secrets."
         },
         {
             "name": "storageAccountName",
@@ -55,7 +47,7 @@
             "label": "State Storage Container Name",
             "defaultValue": "",
             "required": true,
-            "helpMarkDown": "Name of the Blob Storage Container that stores the Pulumi State file for Pulumi Stack."
+            "helpMarkDown": "Name of the Blob Storage Container that stores the Pulumi State file for the selected Pulumi Stack."
         },
         {
             "name": "keyVaultName",
@@ -64,6 +56,30 @@
             "defaultValue": "",
             "required": true,
             "helpMarkDown": "The name of the Key Vault that holds the passphrase used to encrypt secrets for the selected Pulumi Stack."
+        },
+        {
+            "name": "passphraseKeyVaultSecretName",
+            "type": "string",
+            "label": "Key Vault Stack Secret Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "The name of the secret in Key Vault that holds the passphrase to use to encrypt secrets for the selected Pulumi Stack. Will also be used as the name of the lock file for stack operations."
+        },
+        {
+            "name": "stack",
+            "type": "string",
+            "label": "Stack Name",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "The Pulumi Stack against which to run the commands. Can only contain alphanumeric characters or dashes and must start with a letter."
+        },
+        {
+            "name": "azureSubscriptionDeployment",
+            "type": "connectedService:AzureRM",
+            "label": "Azure Subscription (Deployments)",
+            "defaultValue": "",
+            "required": true,
+            "helpMarkDown": "Select the Azure Resource Manager subscription that has access to deploy and destroy the resources created by your Pulumi program."
         },
         {
             "name": "cwd",
@@ -78,7 +94,7 @@
             "type": "pickList",
             "label": "Pulumi Command",
             "defaultValue": "",
-            "helpMarkDown": "The pulumi command to run, possible options are:\n- **stack init** - initilises a new stack, with a new secret stored in keyvault to encrypt secrets. On success will create new stack.Pulumi file in working directory. Note: will error if stack already exists in azure storage backend store *(use stack exists command to check for existing stack first)*.\n- **stack exists** - checks if the given stack exists in the remote blob storage account. Will write the result (either `'true'` or `'false'`) to the job level environment vairiable named in the Output Variable setting, defaults to `STACK_EXISTS_RESULT`.\n- **update config** - loops over all environment variables for the current job. For any environment variable that is prefixed with the Config Prefix setting, defaults to `PULUMI_`, will write the name (excluding the prefix) and value as a config option for the given stack. Note: if the variable is marked as secret this will be written as secret in the config as well. Once complete will set the status of this action to the job level environment variable named in the Output Variable setting, defaults to `STACK_CONFIG_UPDATE_RESULT`. Possible values are `'some_change'` or `'no_change'`.\n- **preview** - runs the pulumi [preview](https://www.pulumi.com/docs/reference/cli/pulumi_preview/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the preview command will also be written to disk at the given filePath.\n- **up** - runs the pulumi [up](https://www.pulumi.com/docs/reference/cli/pulumi_up/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the up command will also be written to disk at the given filePath.\n- **destroy** - runs the pulumi [destroy](https://www.pulumi.com/docs/reference/cli/pulumi_destroy/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the destroy command will also be written to disk at the given filePath.",
+            "helpMarkDown": "The pulumi command to run, possible options are:\n- **stack init** - initilises a new stack, with a new secret stored in keyvault to encrypt secrets. On success will create new stack.Pulumi file in working directory. Note: will error if stack already exists in azure storage backend store *(use stack exists command to check for existing stack first)*.\n- **stack exists** - checks if the given stack exists in the remote blob storage account. Will write the result (either `'true'` or `'false'`) to the job level environment vairiable named in the Output Variable setting, defaults to `STACK_EXISTS_RESULT`.\n- **update config** - loops over all environment variables for the current job. For any environment variable that is prefixed with one of the prefixes defined in the Config Prefix setting, (comma seperated, case insensitive, defaults to `PULUMI_`), will write the name (excluding or including the prefix, dependant on Include Prefix setting) and value as a config option for the given stack. Note: if the variable is marked as secret this will be written as secret in the config as well. Once complete will set the status of this action to the job level environment variable named in the Output Variable setting, defaults to `STACK_CONFIG_UPDATE_RESULT`. Possible values are `'some_change'` or `'no_change'`.\n- **output config** - loops over all config settings for the current stack. For any config vaule that is prefixed with one of the prefixes defined in the Config Prefix setting, (comma seperated, case insensitive), will write the name (excluding or including the prefix, dependant on Include Prefix setting) and value as a environment variable for the current job. Note: if the config value is marked as secret the environment variable will also be created as a secret.\n- **preview** - runs the pulumi [preview](https://www.pulumi.com/docs/reference/cli/pulumi_preview/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the preview command will also be written to disk at the given filePath.\n- **up** - runs the pulumi [up](https://www.pulumi.com/docs/reference/cli/pulumi_up/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the up command will also be written to disk at the given filePath.\n- **destroy** - runs the pulumi [destroy](https://www.pulumi.com/docs/reference/cli/pulumi_destroy/) command with any optional options specified in the Command Args setting. If the Output FilePath setting is set to a valid filePath the Output of the destroy command will also be written to disk at the given filePath.",
             "required": true,
             "properties": {
                 "EditableOptions": "False"
@@ -87,6 +103,7 @@
                 "stack init": "stack init",
                 "stack exists": "stack exists",
                 "update config": "update config",
+                "output config": "output config",
                 "preview": "preview",
                 "up": "up",
                 "destroy": "destroy"
@@ -116,8 +133,17 @@
             "label": "Config Prefix",
             "defaultValue": "PULUMI_",
             "required": false,
-            "helpMarkDown": "settings with this given prefix will be saved into the stacks config using the value from the current job environment.",
-            "visibleRule": "cmd = update config"
+            "helpMarkDown": "comma seperated, case insensitive list of prefixes where environment variables with one of these given prefixes will be saved into the stacks config using the value from the current job environment and setting name without the prefix.",
+            "visibleRule": "cmd = update config || cmd = output config"
+        },
+        {
+            "name": "configSettingsIncludePrefix",
+            "type": "boolean",
+            "label": "Include Prefix",
+            "defaultValue": false,
+            "required": false,
+            "helpMarkDown": "set to true to include the prefix from the environment variable name in the config variable name.",
+            "visibleRule": "cmd = update config || cmd = output config"
         },
         {
             "name": "configOutputVariable",
