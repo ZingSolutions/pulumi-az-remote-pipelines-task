@@ -254,18 +254,20 @@ export async function runPulumiProgramAsync(
         if (saveOutputToFilePath) {
             cmdOutStream = new StringStream();
         }
-        exitCode = await tl.tool(pulumiPath).line(cmdToRun).exec(getExecOptions(envArgs, workingDirectory, cmdOutStream));
-        if (exitCode !== 0) {
-            throw new Error(`running pulumi command ${cmdToRun} failed, exit code was: ${exitCode}`);
-        }
-        console.log('command run OK.');
 
-        if (saveOutputToFilePath && cmdOutStream) {
-            console.log('echoing results to console');
+        console.log(`running pulumi command ${cmdToRun}`);
+        exitCode = await tl.tool(pulumiPath).line(cmdToRun).exec(getExecOptions(envArgs, workingDirectory, cmdOutStream));
+
+        if (cmdOutStream) {
             const lines: string = cmdOutStream.getLines().join('\n');
             process.stdout.write(lines);
-            console.log(`writing results to file: ${saveOutputToFilePath}`);
-            tl.writeFile(saveOutputToFilePath, lines);
+            if (saveOutputToFilePath) {
+                tl.writeFile(saveOutputToFilePath, lines);
+            }
+        }
+
+        if (exitCode !== 0) {
+            throw new Error(`running pulumi command ${cmdToRun} failed, exit code was: ${exitCode}`);
         }
     }
     finally {
