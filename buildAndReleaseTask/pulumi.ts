@@ -147,8 +147,6 @@ export async function runPulumiProgramAsync(
                 `.pulumi/stacks/${stackName}.json`);
             tl.setVariable(stackExistsOutVarName, stackExists.toString());
             return;
-        case 'stack output':
-            break;
         case 'update config':
             isUpdateConfigCmd = true;
             updateConfigSettingPrefixs =
@@ -165,6 +163,7 @@ export async function runPulumiProgramAsync(
         case 'preview':
         case 'up':
         case 'destroy':
+        case 'stack output':
             if (tl.getBoolInput(InputNames.PULUMI_COMMAND_OUTPUT_TO_DISK_BOOLEAN, false)) {
                 saveOutputToFilePath = tl.getPathInput(InputNames.PULUMI_COMMAND_OUTPUT_FILE_PATH, true);
             }

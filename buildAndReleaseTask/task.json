@@ -13,7 +13,7 @@
     "version": {
         "Major": 0,
         "Minor": 0,
-        "Patch": 83
+        "Patch": 84
     },
     "instanceNameFormat": "Run pulumi $(cmd) $(args)",
     "inputs": [
@@ -162,7 +162,7 @@
             "defaultValue": false,
             "required": false,
             "helpMarkDown": "Set to true to log the output of the pulumi command to disk.",
-            "visibleRule": "cmd = preview || cmd = up || cmd = destroy"
+            "visibleRule": "cmd = preview || cmd = up || cmd = destroy || cmd = stack output"
         },
         {
             "name": "cmdOutputFilePath",
