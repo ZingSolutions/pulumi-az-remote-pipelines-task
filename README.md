@@ -14,6 +14,8 @@ The plugin supports the following Pulumi commands.
 
 - **stack exists** - checks if the given stack exists in the remote blob storage account. Will write the result (either `"true"` or `"false"`) to the job level environment vairiable named in the Output Variable setting, defaults to `STACK_EXISTS_RESULT`.
 
+- **stack output** - writes the stack outputs of the given stack to the console window. Can be used with addtional parameters to redirect stack output to a file.
+
 - **update config** - loops over all environment variables for the current job. For any environment variable that is prefixed with one of the prefixes defined in the Config Prefix setting, (comma seperated, case insensitive, defaults to `PULUMI_`), will write the name (excluding or including the prefix, dependant on Include Prefix setting) and value as a config option for the given stack. Note: if the variable is marked as secret this will be written as secret in the config as well. Once complete will set the status of this action to the job level environment variable named in the Output Variable setting, defaults to `STACK_CONFIG_UPDATE_RESULT`. Possible values are `"some_change"` or `"no_change"`.
 
 - **output config** - loops over all config settings for the current stack. For any config vaule that is prefixed with one of the prefixes defined in the Config Prefix setting, 

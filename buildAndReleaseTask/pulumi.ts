@@ -147,6 +147,8 @@ export async function runPulumiProgramAsync(
                 `.pulumi/stacks/${stackName}.json`);
             tl.setVariable(stackExistsOutVarName, stackExists.toString());
             return;
+        case 'stack output':
+            break;
         case 'update config':
             isUpdateConfigCmd = true;
             updateConfigSettingPrefixs =
