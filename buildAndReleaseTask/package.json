@@ -11,7 +11,7 @@
   "author": "dan.hyrjak@zing.dev",
   "license": "MIT",
   "dependencies": {
-    "axios": "^0.19.0",
+    "axios": "^0.21.1",
     "azure-pipelines-task-lib": "^2.8.0",
     "azure-pipelines-tool-lib": "^0.12.0"
   },
